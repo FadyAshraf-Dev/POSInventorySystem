@@ -2,7 +2,8 @@ module org.example.posinventorysystem {
     requires javafx.controls;
     requires javafx.fxml;
 
+    opens org.example.posinventorysystem.app to javafx.fxml, javafx.graphics;
+    opens org.example.posinventorysystem.controller to javafx.fxml;
 
-    opens org.example.posinventorysystem to javafx.fxml;
-    exports org.example.posinventorysystem;
+    exports org.example.posinventorysystem.app;
 }
