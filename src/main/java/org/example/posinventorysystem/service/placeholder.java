@@ -1,4 +1,4 @@
-package org.example.posinventorysystem.data;
+package org.example.posinventorysystem.service;
 
 public class placeholder {
 }
