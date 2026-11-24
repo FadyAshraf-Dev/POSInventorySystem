@@ -1,4 +1,4 @@
-package org.example.posinventorysystem;
+package org.example.posinventorysystem.controller;
 
 import javafx.fxml.FXML;
 import javafx.scene.control.Label;
