@@ -1,4 +1,4 @@
-package org.example.posinventorysystem;
+package org.example.posinventorysystem.app;
 
 import javafx.application.Application;
 import javafx.fxml.FXMLLoader;
@@ -7,12 +7,12 @@ import javafx.stage.Stage;
 
 import java.io.IOException;
 
-public class HelloApplication extends Application {
+public class MainApplication extends Application {
     @Override
     public void start(Stage stage) throws IOException {
-        FXMLLoader fxmlLoader = new FXMLLoader(HelloApplication.class.getResource("Login.fxml"));
-        Scene scene = new Scene(fxmlLoader.load());
-        stage.setTitle("Point Of Sale Inventory");
+        FXMLLoader fxmlLoader = new FXMLLoader(MainApplication.class.getResource("/org/example/posinventorysystem/Login.fxml"));
+        Scene scene = new Scene(fxmlLoader.load(), 480, 360);
+        stage.setTitle("Hello!");
         stage.setScene(scene);
         stage.show();
     }
