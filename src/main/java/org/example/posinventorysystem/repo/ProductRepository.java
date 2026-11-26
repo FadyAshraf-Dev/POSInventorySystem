@@ -67,6 +67,44 @@ public class ProductRepository implements GenericRepository<Product, Integer> {
         }
     }
 
+    /**
+     * Atomically adjusts stock by delta (positive = stock in, negative = stock out)
+     * without a read-then-write race: the database itself checks the resulting
+     * quantity never goes negative, so two concurrent sales of the same product
+     * can't silently overwrite each other's decrement (lost update).
+     *
+     * Returns false if the adjustment would take stock below zero (insufficient
+     * stock) — in that case, zero rows are updated and nothing changes.
+     *
+     * No-connection form: opens its own connection, auto-commits. Only safe to
+     * call on its own when NOT part of a larger multi-table operation (e.g. a
+     * standalone manual stock correction). For a sale/purchase — which also
+     * writes sale_item/movement rows — use the (Connection, ...) overload
+     * inside TransactionManager.run(...) instead, so the stock change and the
+     * related rows commit or roll back together.
+     */
+    public boolean adjustStock(int productId, int delta) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return adjustStock(conn, productId, delta);
+        } catch (SQLException e) {
+            throw new RepositoryException(
+                    "Failed to adjust stock for product id: " + productId + " by delta: " + delta, e);
+        }
+    }
+
+    public boolean adjustStock(Connection conn, int productId, int delta) throws SQLException {
+        String sql = "UPDATE product SET quantity_in_stock = quantity_in_stock + ? "
+                + "WHERE product_id = ? AND quantity_in_stock + ? >= 0";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, delta);
+            ps.setInt(2, productId);
+            ps.setInt(3, delta);
+            // Zero rows updated means either the product doesn't exist, or the
+            // adjustment would have taken stock below zero (insufficient stock).
+            return ps.executeUpdate() > 0;
+        }
+    }
+
     public Optional<Product> findById(Connection conn, Integer id) throws SQLException {
         String sql = BASE_SELECT + " WHERE product_id = ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -125,12 +163,12 @@ public class ProductRepository implements GenericRepository<Product, Integer> {
     }
 
     /**
-     * NOTE (review item 2): this still writes the whole quantity_in_stock value,
-     * which is unsafe under concurrent sales (lost update). A dedicated
-     * adjustStock(conn, productId, delta) using an atomic
-     * "SET quantity_in_stock = quantity_in_stock + ?" should replace stock
-     * changes going through this method. Left as-is here since that's a
-     * separate review item — flagging so it isn't forgotten.
+     * Updates product fields including quantity_in_stock as a full overwrite.
+     * Do NOT use this for ordinary stock changes from sales/purchases/returns —
+     * it has no concurrency protection against two simultaneous stock changes
+     * (lost update). Use adjustStock(conn, productId, delta) for that; reserve
+     * this method for edits to non-stock fields (name, price, category, etc.)
+     * or deliberate manual stock corrections where overwriting is intended.
      */
     public boolean update(Connection conn, Product product) throws SQLException {
         String sql = "UPDATE product SET barcode = ?, product_name = ?, category_id = ?, unit_id = ?, "
