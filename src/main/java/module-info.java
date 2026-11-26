@@ -11,4 +11,5 @@ module org.example.posinventorysystem {
     exports org.example.posinventorysystem.app;
     exports org.example.posinventorysystem.model;
     exports org.example.posinventorysystem.repo;
+    exports org.example.posinventorysystem.data;
 }
