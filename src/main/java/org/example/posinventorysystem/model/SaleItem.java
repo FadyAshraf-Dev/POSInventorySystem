@@ -11,6 +11,7 @@ public class SaleItem {
     private Integer productId;
     private Integer quantity;
     private BigDecimal unitPrice;
+    private BigDecimal unitCost;
     private BigDecimal lineTotal;
 
     public SaleItem() {
@@ -24,6 +25,13 @@ public class SaleItem {
         this.quantity = quantity;
         this.unitPrice = unitPrice;
         this.lineTotal = lineTotal;
+    }
+
+    /** Creates a sale item with selling-price and cost-price snapshots. */
+    public SaleItem(Integer saleItemId, Integer saleId, Integer productId, Integer quantity,
+                    BigDecimal unitPrice, BigDecimal unitCost, BigDecimal lineTotal) {
+        this(saleItemId, saleId, productId, quantity, unitPrice, lineTotal);
+        this.unitCost = unitCost;
     }
 
     public Integer getSaleItemId() {
@@ -66,6 +74,14 @@ public class SaleItem {
         this.unitPrice = unitPrice;
     }
 
+    public BigDecimal getUnitCost() {
+        return unitCost;
+    }
+
+    public void setUnitCost(BigDecimal unitCost) {
+        this.unitCost = unitCost;
+    }
+
     public BigDecimal getLineTotal() {
         return lineTotal;
     }
@@ -80,6 +96,7 @@ public class SaleItem {
     @Override
     public String toString() {
         return "SaleItem{saleItemId=" + saleItemId + ", saleId=" + saleId + ", productId=" + productId
-                + ", quantity=" + quantity + ", lineTotal=" + lineTotal + "}";
+                + ", quantity=" + quantity + ", unitPrice=" + unitPrice
+                + ", unitCost=" + unitCost + ", lineTotal=" + lineTotal + "}";
     }
 }

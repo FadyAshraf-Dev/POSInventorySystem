@@ -3,6 +3,7 @@ package org.example.posinventorysystem.repo;
 import org.example.posinventorysystem.data.HikariDatabaseConfig;
 import org.example.posinventorysystem.model.Product;
 
+import java.math.BigDecimal;
 import java.sql.*;
 import java.util.List;
 import java.util.Optional;
@@ -39,6 +40,24 @@ public class ProductRepository implements GenericRepository<Product, Integer> {
 
     public Optional<Product> findByBarcode(String barcode) {
         return JdbcExecutor.withConnection("Failed to find product by barcode: " + barcode, conn -> findByBarcode(conn, barcode));
+    }
+
+    /**
+     * Returns the product's current cost price for snapshotting when a sale item
+     * is created. The caller should copy this value into SaleItem.unitCost before
+     * inserting the sale item; reports must never look up the mutable product
+     * cost_price for an already completed sale.
+     */
+    public Optional<BigDecimal> findCurrentCostPrice(int productId) {
+        return JdbcExecutor.withConnection(
+                "Failed to find current cost price for product: " + productId,
+                conn -> findCurrentCostPrice(conn, productId)
+        );
+    }
+
+    public Optional<BigDecimal> findCurrentCostPrice(Connection conn, int productId) throws SQLException {
+        String sql = "SELECT cost_price FROM product WHERE product_id = ? AND deleted_at IS NULL";
+        return JdbcExecutor.queryOne(conn, sql, ps -> ps.setInt(1, productId), rs -> rs.getBigDecimal("cost_price"));
     }
 
     @Override

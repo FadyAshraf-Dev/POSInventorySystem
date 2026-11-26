@@ -10,7 +10,7 @@ import java.util.Optional;
 public class SaleItemRepository implements GenericRepository<SaleItem, Integer> {
 
     private static final String BASE_SELECT =
-            "SELECT sale_item_id, sale_id, product_id, quantity, unit_price, discount, line_total FROM sale_item";
+            "SELECT sale_item_id, sale_id, product_id, quantity, unit_price, unit_cost, discount, line_total FROM sale_item";
 
     @Override
     public Optional<SaleItem> findById(Integer id) {
@@ -63,14 +63,21 @@ public class SaleItemRepository implements GenericRepository<SaleItem, Integer> 
     }
 
     public Integer insert(Connection conn, SaleItem saleItem) throws SQLException {
-        String sql = "INSERT INTO sale_item (sale_id, product_id, quantity, unit_price, discount, line_total) "
-                + "VALUES (?, ?, ?, ?, ?, ?)";
+        if (saleItem.getUnitCost() == null) {
+            throw new IllegalArgumentException(
+                    "SaleItem.unitCost must be set from the product's current cost price before insertion."
+            );
+        }
+
+        String sql = "INSERT INTO sale_item (sale_id, product_id, quantity, unit_price, unit_cost, discount, line_total) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?)";
         int generatedId = JdbcExecutor.executeInsert(conn, sql, ps -> { ps.setInt(1, saleItem.getSaleId());
             ps.setInt(2, saleItem.getProductId());
             ps.setInt(3, saleItem.getQuantity());
             ps.setBigDecimal(4, saleItem.getUnitPrice());
-            ps.setBigDecimal(5, saleItem.getDiscount());
-            ps.setBigDecimal(6, saleItem.getLineTotal()); });
+            ps.setBigDecimal(5, saleItem.getUnitCost());
+            ps.setBigDecimal(6, saleItem.getDiscount());
+            ps.setBigDecimal(7, saleItem.getLineTotal()); });
         saleItem.setSaleItemId(generatedId);
         return generatedId;
     }
@@ -104,6 +111,7 @@ public class SaleItemRepository implements GenericRepository<SaleItem, Integer> 
         item.setProductId(rs.getInt("product_id"));
         item.setQuantity(rs.getInt("quantity"));
         item.setUnitPrice(rs.getBigDecimal("unit_price"));
+        item.setUnitCost(rs.getBigDecimal("unit_cost"));
         item.setDiscount(rs.getBigDecimal("discount"));
         item.setLineTotal(rs.getBigDecimal("line_total"));
         return item;

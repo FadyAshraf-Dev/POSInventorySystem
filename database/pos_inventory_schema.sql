@@ -165,6 +165,7 @@ CREATE TABLE sale_item (
                            product_id      INT NOT NULL,
                            quantity        INT NOT NULL,
                            unit_price      DECIMAL(10,2) NOT NULL,
+                           unit_cost       DECIMAL(10,2) NOT NULL COMMENT 'Product cost price captured when this sale item was created',
                            discount        DECIMAL(10,2) NOT NULL DEFAULT 0.00,
                            line_total      DECIMAL(10,2) NOT NULL,
                            deleted_at      DATETIME(6) NULL,
@@ -176,6 +177,7 @@ CREATE TABLE sale_item (
                                    ON UPDATE CASCADE ON DELETE RESTRICT,
                            CONSTRAINT chk_saleitem_qty_positive CHECK (quantity > 0),
                            CONSTRAINT chk_saleitem_unit_price_nonneg CHECK (unit_price >= 0),
+                           CONSTRAINT chk_saleitem_unit_cost_nonneg CHECK (unit_cost >= 0),
                            CONSTRAINT chk_saleitem_discount_nonneg CHECK (discount >= 0),
                            CONSTRAINT chk_saleitem_line_total_nonneg CHECK (line_total >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
