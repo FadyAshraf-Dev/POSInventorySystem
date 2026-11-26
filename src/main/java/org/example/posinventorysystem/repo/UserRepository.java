@@ -58,16 +58,25 @@ public class UserRepository implements GenericRepository<User, Integer> {
     }
 
     @Override
-    public boolean deleteById(Integer id) {
+    public boolean softDelete(Integer id) {
         try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return deleteById(conn, id);
+            return softDelete(conn, id);
         } catch (SQLException e) {
-            throw new RepositoryException("Failed to delete user with id: " + id, e);
+            throw new RepositoryException("Failed to soft-delete user with id: " + id, e);
+        }
+    }
+
+    @Override
+    public boolean restore(Integer id) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return restore(conn, id);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to restore user with id: " + id, e);
         }
     }
 
     public Optional<User> findById(Connection conn, Integer id) throws SQLException {
-        String sql = BASE_SELECT + " WHERE user_id = ?";
+        String sql = BASE_SELECT + " WHERE user_id = ? AND deleted_at IS NULL";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
             try (ResultSet rs = ps.executeQuery()) {
@@ -77,7 +86,7 @@ public class UserRepository implements GenericRepository<User, Integer> {
     }
 
     public Optional<User> findByUsername(Connection conn, String username) throws SQLException {
-        String sql = BASE_SELECT + " WHERE username = ?";
+        String sql = BASE_SELECT + " WHERE username = ? AND deleted_at IS NULL";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, username);
             try (ResultSet rs = ps.executeQuery()) {
@@ -87,7 +96,7 @@ public class UserRepository implements GenericRepository<User, Integer> {
     }
 
     public List<User> findAll(Connection conn) throws SQLException {
-        String sql = BASE_SELECT + " ORDER BY user_id";
+        String sql = BASE_SELECT + " WHERE deleted_at IS NULL ORDER BY user_id";
         List<User> users = new ArrayList<>();
         try (Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery(sql)) {
@@ -129,7 +138,7 @@ public class UserRepository implements GenericRepository<User, Integer> {
      */
     public boolean update(Connection conn, User user) throws SQLException {
         String sql = "UPDATE user SET full_name = ?, username = ?, password_hash = ?, "
-                + "role_id = ?, is_active = ? WHERE user_id = ?";
+                + "role_id = ?, is_active = ? WHERE user_id = ? AND deleted_at IS NULL";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, user.getFullName());
             ps.setString(2, user.getUsername());
@@ -141,12 +150,14 @@ public class UserRepository implements GenericRepository<User, Integer> {
         }
     }
 
-    public boolean deleteById(Connection conn, Integer id) throws SQLException {
-        String sql = "DELETE FROM user WHERE user_id = ?";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, id);
-            return ps.executeUpdate() > 0;
-        }
+    public boolean softDelete(Connection conn, Integer id) throws SQLException {
+        String sql = "UPDATE user SET deleted_at = CURRENT_TIMESTAMP(6) WHERE user_id = ? AND deleted_at IS NULL";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
+    }
+
+    public boolean restore(Connection conn, Integer id) throws SQLException {
+        String sql = "UPDATE user SET deleted_at = NULL WHERE user_id = ? AND deleted_at IS NOT NULL";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
     }
 
     private User mapRow(ResultSet rs) throws SQLException {

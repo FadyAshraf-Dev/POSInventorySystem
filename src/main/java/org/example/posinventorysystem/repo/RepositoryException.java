@@ -2,9 +2,9 @@ package org.example.posinventorysystem.repo;
 
 /**
  * Unchecked wrapper around SQLException (and any other DAO-layer failure).
- * DAOs catch SQLException internally and rethrow this, so service/UI code
- * doesn't need to handle checked SQLException at every call site —
- * only catch RepositoryException where it actually matters.
+ * Repositories catch SQLException internally and rethrow this, so
+ * service/UI code doesn't need to handle checked SQLException at every
+ * call site — only catch RepositoryException where it actually matters.
  */
 public class RepositoryException extends RuntimeException {
 

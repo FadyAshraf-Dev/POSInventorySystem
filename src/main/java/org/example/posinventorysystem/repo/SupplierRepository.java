@@ -47,16 +47,25 @@ public class SupplierRepository implements GenericRepository<Supplier, Integer> 
     }
 
     @Override
-    public boolean deleteById(Integer id) {
+    public boolean softDelete(Integer id) {
         try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return deleteById(conn, id);
+            return softDelete(conn, id);
         } catch (SQLException e) {
-            throw new RepositoryException("Failed to delete supplier with id: " + id, e);
+            throw new RepositoryException("Failed to soft-delete supplier with id: " + id, e);
+        }
+    }
+
+    @Override
+    public boolean restore(Integer id) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return restore(conn, id);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to restore supplier with id: " + id, e);
         }
     }
 
     public Optional<Supplier> findById(Connection conn, Integer id) throws SQLException {
-        String sql = "SELECT supplier_id, supplier_name, phone FROM supplier WHERE supplier_id = ?";
+        String sql = "SELECT supplier_id, supplier_name, phone, address FROM supplier WHERE deleted_at IS NULL AND supplier_id = ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
             try (ResultSet rs = ps.executeQuery()) {
@@ -66,7 +75,7 @@ public class SupplierRepository implements GenericRepository<Supplier, Integer> 
     }
 
     public List<Supplier> findAll(Connection conn) throws SQLException {
-        String sql = "SELECT supplier_id, supplier_name, phone FROM supplier ORDER BY supplier_id";
+        String sql = "SELECT supplier_id, supplier_name, phone, address FROM supplier WHERE deleted_at IS NULL ORDER BY supplier_id";
         List<Supplier> suppliers = new ArrayList<>();
         try (Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery(sql)) {
@@ -78,10 +87,11 @@ public class SupplierRepository implements GenericRepository<Supplier, Integer> 
     }
 
     public Integer insert(Connection conn, Supplier supplier) throws SQLException {
-        String sql = "INSERT INTO supplier (supplier_name, phone) VALUES (?, ?)";
+        String sql = "INSERT INTO supplier (supplier_name, phone, address) VALUES (?, ?, ?)";
         try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, supplier.getSupplierName());
             ps.setString(2, supplier.getPhone());
+            ps.setString(3, supplier.getAddress());
             ps.executeUpdate();
 
             try (ResultSet keys = ps.getGeneratedKeys()) {
@@ -96,21 +106,24 @@ public class SupplierRepository implements GenericRepository<Supplier, Integer> 
     }
 
     public boolean update(Connection conn, Supplier supplier) throws SQLException {
-        String sql = "UPDATE supplier SET supplier_name = ?, phone = ? WHERE supplier_id = ?";
+        String sql = "UPDATE supplier SET supplier_name = ?, phone = ?, address = ? WHERE supplier_id = ? AND deleted_at IS NULL";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, supplier.getSupplierName());
             ps.setString(2, supplier.getPhone());
-            ps.setInt(3, supplier.getSupplierId());
+            ps.setString(3, supplier.getAddress());
+            ps.setInt(4, supplier.getSupplierId());
             return ps.executeUpdate() > 0;
         }
     }
 
-    public boolean deleteById(Connection conn, Integer id) throws SQLException {
-        String sql = "DELETE FROM supplier WHERE supplier_id = ?";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, id);
-            return ps.executeUpdate() > 0;
-        }
+    public boolean softDelete(Connection conn, Integer id) throws SQLException {
+        String sql = "UPDATE supplier SET deleted_at = CURRENT_TIMESTAMP(6) WHERE supplier_id = ? AND deleted_at IS NULL";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
+    }
+
+    public boolean restore(Connection conn, Integer id) throws SQLException {
+        String sql = "UPDATE supplier SET deleted_at = NULL WHERE supplier_id = ? AND deleted_at IS NOT NULL";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
     }
 
     private Supplier mapRow(ResultSet rs) throws SQLException {
@@ -118,6 +131,7 @@ public class SupplierRepository implements GenericRepository<Supplier, Integer> 
         supplier.setSupplierId(rs.getInt("supplier_id"));
         supplier.setSupplierName(rs.getString("supplier_name"));
         supplier.setPhone(rs.getString("phone"));
+        supplier.setAddress(rs.getString("address"));
         return supplier;
     }
 }

@@ -47,16 +47,25 @@ public class CategoryRepository implements GenericRepository<Category, Integer> 
     }
 
     @Override
-    public boolean deleteById(Integer id) {
+    public boolean softDelete(Integer id) {
         try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return deleteById(conn, id);
+            return softDelete(conn, id);
         } catch (SQLException e) {
-            throw new RepositoryException("Failed to delete category with id: " + id, e);
+            throw new RepositoryException("Failed to soft-delete category with id: " + id, e);
+        }
+    }
+
+    @Override
+    public boolean restore(Integer id) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return restore(conn, id);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to restore category with id: " + id, e);
         }
     }
 
     public Optional<Category> findById(Connection conn, Integer id) throws SQLException {
-        String sql = "SELECT category_id, category_name FROM category WHERE category_id = ?";
+        String sql = "SELECT category_id, category_name FROM category WHERE deleted_at IS NULL AND category_id = ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
             try (ResultSet rs = ps.executeQuery()) {
@@ -66,7 +75,7 @@ public class CategoryRepository implements GenericRepository<Category, Integer> 
     }
 
     public List<Category> findAll(Connection conn) throws SQLException {
-        String sql = "SELECT category_id, category_name FROM category ORDER BY category_id";
+        String sql = "SELECT category_id, category_name FROM category WHERE deleted_at IS NULL ORDER BY category_id";
         List<Category> categories = new ArrayList<>();
         try (Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery(sql)) {
@@ -95,7 +104,7 @@ public class CategoryRepository implements GenericRepository<Category, Integer> 
     }
 
     public boolean update(Connection conn, Category category) throws SQLException {
-        String sql = "UPDATE category SET category_name = ? WHERE category_id = ?";
+        String sql = "UPDATE category SET category_name = ? WHERE category_id = ? AND deleted_at IS NULL";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, category.getCategoryName());
             ps.setInt(2, category.getCategoryId());
@@ -103,12 +112,14 @@ public class CategoryRepository implements GenericRepository<Category, Integer> 
         }
     }
 
-    public boolean deleteById(Connection conn, Integer id) throws SQLException {
-        String sql = "DELETE FROM category WHERE category_id = ?";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, id);
-            return ps.executeUpdate() > 0;
-        }
+    public boolean softDelete(Connection conn, Integer id) throws SQLException {
+        String sql = "UPDATE category SET deleted_at = CURRENT_TIMESTAMP(6) WHERE category_id = ? AND deleted_at IS NULL";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
+    }
+
+    public boolean restore(Connection conn, Integer id) throws SQLException {
+        String sql = "UPDATE category SET deleted_at = NULL WHERE category_id = ? AND deleted_at IS NOT NULL";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
     }
 
     private Category mapRow(ResultSet rs) throws SQLException {

@@ -50,25 +50,19 @@ public class SaleRepository implements GenericRepository<Sale, Integer> {
         }
     }
 
-    /**
-     * NOTE (review item 4): deleteById should be removed from Sale once
-     * cancellation/returns go through a status field instead of a hard
-     * delete (sale currently has ON DELETE CASCADE to sale_item/payment,
-     * so deleting an invoice silently wipes its items and payments without
-     * restoring stock). Left in place here since that's a separate review
-     * item — flagging so it isn't forgotten.
-     */
+    
     @Override
-    public boolean deleteById(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return deleteById(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to delete sale with id: " + id, e);
-        }
+    public boolean softDelete(Integer id) {
+        return org.example.posinventorysystem.data.TransactionManager.run(conn -> softDelete(conn, id));
+    }
+
+    @Override
+    public boolean restore(Integer id) {
+        return org.example.posinventorysystem.data.TransactionManager.run(conn -> restore(conn, id));
     }
 
     public Optional<Sale> findById(Connection conn, Integer id) throws SQLException {
-        String sql = BASE_SELECT + " WHERE sale_id = ?";
+        String sql = BASE_SELECT + " WHERE sale_id = ? AND deleted_at IS NULL";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
             try (ResultSet rs = ps.executeQuery()) {
@@ -78,7 +72,7 @@ public class SaleRepository implements GenericRepository<Sale, Integer> {
     }
 
     public List<Sale> findAll(Connection conn) throws SQLException {
-        String sql = BASE_SELECT + " ORDER BY sale_id";
+        String sql = BASE_SELECT + " WHERE deleted_at IS NULL ORDER BY sale_id";
         List<Sale> sales = new ArrayList<>();
         try (Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery(sql)) {
@@ -121,7 +115,7 @@ public class SaleRepository implements GenericRepository<Sale, Integer> {
 
     public boolean update(Connection conn, Sale sale) throws SQLException {
         String sql = "UPDATE sale SET invoice_no = ?, sale_date = ?, user_id = ?, customer_id = ?, "
-                + "subtotal = ?, discount = ?, tax = ?, total = ?, status = ? WHERE sale_id = ?";
+                + "subtotal = ?, discount = ?, tax = ?, total = ?, status = ? WHERE sale_id = ? AND deleted_at IS NULL";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, sale.getInvoiceNo());
             ps.setTimestamp(2, Timestamp.valueOf(sale.getSaleDate()));
@@ -141,12 +135,26 @@ public class SaleRepository implements GenericRepository<Sale, Integer> {
         }
     }
 
-    public boolean deleteById(Connection conn, Integer id) throws SQLException {
-        String sql = "DELETE FROM sale WHERE sale_id = ?";
+    public boolean softDelete(Connection conn, Integer id) throws SQLException {
+        String sql = "UPDATE sale SET deleted_at = CURRENT_TIMESTAMP(6) WHERE sale_id = ? AND deleted_at IS NULL";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
-            return ps.executeUpdate() > 0;
+            if (ps.executeUpdate() == 0) return false;
         }
+        try (PreparedStatement child = conn.prepareStatement("UPDATE sale_item SET deleted_at = (SELECT deleted_at FROM sale WHERE sale_id = ?) WHERE sale_id = ? AND deleted_at IS NULL")) {
+            child.setInt(1, id); child.setInt(2, id); child.executeUpdate();
+        }
+        return true;
+    }
+
+    public boolean restore(Connection conn, Integer id) throws SQLException {
+        try (PreparedStatement child = conn.prepareStatement(
+                "UPDATE sale_item SET deleted_at = NULL WHERE sale_id = ? "
+                        + "AND deleted_at = (SELECT deleted_at FROM sale WHERE sale_id = ? AND deleted_at IS NOT NULL)")) {
+            child.setInt(1, id); child.setInt(2, id); child.executeUpdate();
+        }
+        String sql = "UPDATE sale SET deleted_at = NULL WHERE sale_id = ? AND deleted_at IS NOT NULL";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
     }
 
     private Sale mapRow(ResultSet rs) throws SQLException {

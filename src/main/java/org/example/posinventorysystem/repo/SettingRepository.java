@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-public class SettingRepository implements GenericRepository<Setting, Integer> {
+public class SettingRepository implements UpdatableRepository<Setting, Integer> {
 
     @Override
     public Optional<Setting> findById(Integer id) {
@@ -46,17 +46,8 @@ public class SettingRepository implements GenericRepository<Setting, Integer> {
         }
     }
 
-    @Override
-    public boolean deleteById(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return deleteById(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to delete setting with id: " + id, e);
-        }
-    }
-
     public Optional<Setting> findById(Connection conn, Integer id) throws SQLException {
-        String sql = "SELECT setting_id, store_name, currency, tax_rate FROM setting WHERE setting_id = ?";
+        String sql = "SELECT setting_id, store_name, currency, tax_rate, store_address, store_phone, store_email FROM setting WHERE setting_id = ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
             try (ResultSet rs = ps.executeQuery()) {
@@ -66,7 +57,7 @@ public class SettingRepository implements GenericRepository<Setting, Integer> {
     }
 
     public List<Setting> findAll(Connection conn) throws SQLException {
-        String sql = "SELECT setting_id, store_name, currency, tax_rate FROM setting ORDER BY setting_id";
+        String sql = "SELECT setting_id, store_name, currency, tax_rate, store_address, store_phone, store_email FROM setting ORDER BY setting_id";
         List<Setting> settings = new ArrayList<>();
         try (Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery(sql)) {
@@ -78,11 +69,14 @@ public class SettingRepository implements GenericRepository<Setting, Integer> {
     }
 
     public Integer insert(Connection conn, Setting setting) throws SQLException {
-        String sql = "INSERT INTO setting (store_name, currency, tax_rate) VALUES (?, ?, ?)";
+        String sql = "INSERT INTO setting (store_name, currency, tax_rate, store_address, store_phone, store_email) VALUES (?, ?, ?, ?, ?, ?)";
         try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, setting.getStoreName());
             ps.setString(2, setting.getCurrency());
             ps.setBigDecimal(3, setting.getTaxRate());
+            ps.setString(4, setting.getStoreAddress());
+            ps.setString(5, setting.getStorePhone());
+            ps.setString(6, setting.getStoreEmail());
             ps.executeUpdate();
 
             try (ResultSet keys = ps.getGeneratedKeys()) {
@@ -97,23 +91,19 @@ public class SettingRepository implements GenericRepository<Setting, Integer> {
     }
 
     public boolean update(Connection conn, Setting setting) throws SQLException {
-        String sql = "UPDATE setting SET store_name = ?, currency = ?, tax_rate = ? WHERE setting_id = ?";
+        String sql = "UPDATE setting SET store_name = ?, currency = ?, tax_rate = ?, store_address = ?, store_phone = ?, store_email = ? WHERE setting_id = ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, setting.getStoreName());
             ps.setString(2, setting.getCurrency());
             ps.setBigDecimal(3, setting.getTaxRate());
-            ps.setInt(4, setting.getSettingId());
+            ps.setString(4, setting.getStoreAddress());
+            ps.setString(5, setting.getStorePhone());
+            ps.setString(6, setting.getStoreEmail());
+            ps.setInt(7, setting.getSettingId());
             return ps.executeUpdate() > 0;
         }
     }
 
-    public boolean deleteById(Connection conn, Integer id) throws SQLException {
-        String sql = "DELETE FROM setting WHERE setting_id = ?";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, id);
-            return ps.executeUpdate() > 0;
-        }
-    }
 
     private Setting mapRow(ResultSet rs) throws SQLException {
         Setting setting = new Setting();
@@ -121,6 +111,9 @@ public class SettingRepository implements GenericRepository<Setting, Integer> {
         setting.setStoreName(rs.getString("store_name"));
         setting.setCurrency(rs.getString("currency"));
         setting.setTaxRate(rs.getBigDecimal("tax_rate"));
+        setting.setStoreAddress(rs.getString("store_address"));
+        setting.setStorePhone(rs.getString("store_phone"));
+        setting.setStoreEmail(rs.getString("store_email"));
         return setting;
     }
 }

@@ -54,11 +54,20 @@ public class RoleRepository implements GenericRepository<Role, Integer> {
     }
 
     @Override
-    public boolean deleteById(Integer id) {
+    public boolean softDelete(Integer id) {
         try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return deleteById(conn, id);
+            return softDelete(conn, id);
         } catch (SQLException e) {
-            throw new RepositoryException("Failed to delete role with id: " + id, e);
+            throw new RepositoryException("Failed to soft-delete role with id: " + id, e);
+        }
+    }
+
+    @Override
+    public boolean restore(Integer id) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return restore(conn, id);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to restore role with id: " + id, e);
         }
     }
 
@@ -71,7 +80,7 @@ public class RoleRepository implements GenericRepository<Role, Integer> {
     // ------------------------------------------------------------
 
     public Optional<Role> findById(Connection conn, Integer id) throws SQLException {
-        String sql = "SELECT role_id, role_name FROM role WHERE role_id = ?";
+        String sql = "SELECT role_id, role_name FROM role WHERE deleted_at IS NULL AND role_id = ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
             try (ResultSet rs = ps.executeQuery()) {
@@ -81,7 +90,7 @@ public class RoleRepository implements GenericRepository<Role, Integer> {
     }
 
     public List<Role> findAll(Connection conn) throws SQLException {
-        String sql = "SELECT role_id, role_name FROM role ORDER BY role_id";
+        String sql = "SELECT role_id, role_name FROM role WHERE deleted_at IS NULL ORDER BY role_id";
         List<Role> roles = new ArrayList<>();
         try (Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery(sql)) {
@@ -110,7 +119,7 @@ public class RoleRepository implements GenericRepository<Role, Integer> {
     }
 
     public boolean update(Connection conn, Role role) throws SQLException {
-        String sql = "UPDATE role SET role_name = ? WHERE role_id = ?";
+        String sql = "UPDATE role SET role_name = ? WHERE role_id = ? AND deleted_at IS NULL";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, role.getRoleName());
             ps.setInt(2, role.getRoleId());
@@ -118,12 +127,14 @@ public class RoleRepository implements GenericRepository<Role, Integer> {
         }
     }
 
-    public boolean deleteById(Connection conn, Integer id) throws SQLException {
-        String sql = "DELETE FROM role WHERE role_id = ?";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, id);
-            return ps.executeUpdate() > 0;
-        }
+    public boolean softDelete(Connection conn, Integer id) throws SQLException {
+        String sql = "UPDATE role SET deleted_at = CURRENT_TIMESTAMP(6) WHERE role_id = ? AND deleted_at IS NULL";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
+    }
+
+    public boolean restore(Connection conn, Integer id) throws SQLException {
+        String sql = "UPDATE role SET deleted_at = NULL WHERE role_id = ? AND deleted_at IS NOT NULL";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
     }
 
     private Role mapRow(ResultSet rs) throws SQLException {

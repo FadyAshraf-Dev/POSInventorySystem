@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-public class PaymentRepository implements GenericRepository<Payment, Integer> {
+public class PaymentRepository implements InsertOnlyRepository<Payment, Integer> {
 
     private static final String BASE_SELECT =
             "SELECT payment_id, sale_id, method, amount, payment_date FROM payment";
@@ -45,34 +45,6 @@ public class PaymentRepository implements GenericRepository<Payment, Integer> {
             return insert(conn, payment);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to insert payment: " + payment, e);
-        }
-    }
-
-    /**
-     * NOTE (review item 4): payment should become insert-only — a financial
-     * ledger shouldn't support update after the fact. Left in place here
-     * since splitting GenericRepository into read/write interfaces is a
-     * separate, larger review item.
-     */
-    @Override
-    public boolean update(Payment payment) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return update(conn, payment);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to update payment: " + payment, e);
-        }
-    }
-
-    /**
-     * NOTE (review item 4): payment should be insert-only — no delete.
-     * Left in place here since that's a separate review item.
-     */
-    @Override
-    public boolean deleteById(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return deleteById(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to delete payment with id: " + id, e);
         }
     }
 
@@ -132,26 +104,7 @@ public class PaymentRepository implements GenericRepository<Payment, Integer> {
         }
     }
 
-    public boolean update(Connection conn, Payment payment) throws SQLException {
-        String sql = "UPDATE payment SET sale_id = ?, method = ?, amount = ?, payment_date = ? "
-                + "WHERE payment_id = ?";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, payment.getSaleId());
-            ps.setString(2, payment.getMethod());
-            ps.setBigDecimal(3, payment.getAmount());
-            ps.setTimestamp(4, Timestamp.valueOf(payment.getPaymentDate()));
-            ps.setInt(5, payment.getPaymentId());
-            return ps.executeUpdate() > 0;
-        }
-    }
 
-    public boolean deleteById(Connection conn, Integer id) throws SQLException {
-        String sql = "DELETE FROM payment WHERE payment_id = ?";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, id);
-            return ps.executeUpdate() > 0;
-        }
-    }
 
     private Payment mapRow(ResultSet rs) throws SQLException {
         Payment payment = new Payment();

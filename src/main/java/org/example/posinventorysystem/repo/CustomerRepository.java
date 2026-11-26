@@ -47,16 +47,25 @@ public class CustomerRepository implements GenericRepository<Customer, Integer> 
     }
 
     @Override
-    public boolean deleteById(Integer id) {
+    public boolean softDelete(Integer id) {
         try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return deleteById(conn, id);
+            return softDelete(conn, id);
         } catch (SQLException e) {
-            throw new RepositoryException("Failed to delete customer with id: " + id, e);
+            throw new RepositoryException("Failed to soft-delete customer with id: " + id, e);
+        }
+    }
+
+    @Override
+    public boolean restore(Integer id) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return restore(conn, id);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to restore customer with id: " + id, e);
         }
     }
 
     public Optional<Customer> findById(Connection conn, Integer id) throws SQLException {
-        String sql = "SELECT customer_id, customer_name, phone FROM customer WHERE customer_id = ?";
+        String sql = "SELECT customer_id, customer_name, phone, address FROM customer WHERE deleted_at IS NULL AND customer_id = ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
             try (ResultSet rs = ps.executeQuery()) {
@@ -66,7 +75,7 @@ public class CustomerRepository implements GenericRepository<Customer, Integer> 
     }
 
     public List<Customer> findAll(Connection conn) throws SQLException {
-        String sql = "SELECT customer_id, customer_name, phone FROM customer ORDER BY customer_id";
+        String sql = "SELECT customer_id, customer_name, phone, address FROM customer WHERE deleted_at IS NULL ORDER BY customer_id";
         List<Customer> customers = new ArrayList<>();
         try (Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery(sql)) {
@@ -78,10 +87,11 @@ public class CustomerRepository implements GenericRepository<Customer, Integer> 
     }
 
     public Integer insert(Connection conn, Customer customer) throws SQLException {
-        String sql = "INSERT INTO customer (customer_name, phone) VALUES (?, ?)";
+        String sql = "INSERT INTO customer (customer_name, phone, address) VALUES (?, ?, ?)";
         try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, customer.getCustomerName());
             ps.setString(2, customer.getPhone());
+            ps.setString(3, customer.getAddress());
             ps.executeUpdate();
 
             try (ResultSet keys = ps.getGeneratedKeys()) {
@@ -96,21 +106,24 @@ public class CustomerRepository implements GenericRepository<Customer, Integer> 
     }
 
     public boolean update(Connection conn, Customer customer) throws SQLException {
-        String sql = "UPDATE customer SET customer_name = ?, phone = ? WHERE customer_id = ?";
+        String sql = "UPDATE customer SET customer_name = ?, phone = ?, address = ? WHERE customer_id = ? AND deleted_at IS NULL";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, customer.getCustomerName());
             ps.setString(2, customer.getPhone());
-            ps.setInt(3, customer.getCustomerId());
+            ps.setString(3, customer.getAddress());
+            ps.setInt(4, customer.getCustomerId());
             return ps.executeUpdate() > 0;
         }
     }
 
-    public boolean deleteById(Connection conn, Integer id) throws SQLException {
-        String sql = "DELETE FROM customer WHERE customer_id = ?";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, id);
-            return ps.executeUpdate() > 0;
-        }
+    public boolean softDelete(Connection conn, Integer id) throws SQLException {
+        String sql = "UPDATE customer SET deleted_at = CURRENT_TIMESTAMP(6) WHERE customer_id = ? AND deleted_at IS NULL";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
+    }
+
+    public boolean restore(Connection conn, Integer id) throws SQLException {
+        String sql = "UPDATE customer SET deleted_at = NULL WHERE customer_id = ? AND deleted_at IS NOT NULL";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
     }
 
     private Customer mapRow(ResultSet rs) throws SQLException {
@@ -118,6 +131,7 @@ public class CustomerRepository implements GenericRepository<Customer, Integer> 
         customer.setCustomerId(rs.getInt("customer_id"));
         customer.setCustomerName(rs.getString("customer_name"));
         customer.setPhone(rs.getString("phone"));
+        customer.setAddress(rs.getString("address"));
         return customer;
     }
 }

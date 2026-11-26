@@ -58,22 +58,27 @@ public class PurchaseItemRepository implements GenericRepository<PurchaseItem, I
         }
     }
 
-    /**
-     * NOTE (review item 4): deleteById should be removed from PurchaseItem —
-     * same reasoning as SaleItem. Left in place here since that's a
-     * separate review item.
-     */
+    
     @Override
-    public boolean deleteById(Integer id) {
+    public boolean softDelete(Integer id) {
         try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return deleteById(conn, id);
+            return softDelete(conn, id);
         } catch (SQLException e) {
-            throw new RepositoryException("Failed to delete purchase item with id: " + id, e);
+            throw new RepositoryException("Failed to soft-delete purchaseitem with id: " + id, e);
+        }
+    }
+
+    @Override
+    public boolean restore(Integer id) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return restore(conn, id);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to restore purchaseitem with id: " + id, e);
         }
     }
 
     public Optional<PurchaseItem> findById(Connection conn, Integer id) throws SQLException {
-        String sql = BASE_SELECT + " WHERE purchase_item_id = ?";
+        String sql = BASE_SELECT + " WHERE purchase_item_id = ? AND deleted_at IS NULL";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
             try (ResultSet rs = ps.executeQuery()) {
@@ -83,7 +88,7 @@ public class PurchaseItemRepository implements GenericRepository<PurchaseItem, I
     }
 
     public List<PurchaseItem> findByPurchaseId(Connection conn, Integer purchaseId) throws SQLException {
-        String sql = BASE_SELECT + " WHERE purchase_id = ? ORDER BY purchase_item_id";
+        String sql = BASE_SELECT + " WHERE purchase_id = ? AND deleted_at IS NULL ORDER BY purchase_item_id";
         List<PurchaseItem> items = new ArrayList<>();
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, purchaseId);
@@ -97,7 +102,7 @@ public class PurchaseItemRepository implements GenericRepository<PurchaseItem, I
     }
 
     public List<PurchaseItem> findAll(Connection conn) throws SQLException {
-        String sql = BASE_SELECT + " ORDER BY purchase_item_id";
+        String sql = BASE_SELECT + " WHERE deleted_at IS NULL ORDER BY purchase_item_id";
         List<PurchaseItem> items = new ArrayList<>();
         try (Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery(sql)) {
@@ -114,7 +119,7 @@ public class PurchaseItemRepository implements GenericRepository<PurchaseItem, I
         try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setInt(1, item.getPurchaseId());
             ps.setInt(2, item.getProductId());
-            ps.setBigDecimal(3, item.getQuantity());
+            ps.setInt(3, item.getQuantity());
             ps.setBigDecimal(4, item.getUnitCost());
             ps.setBigDecimal(5, item.getLineTotal());
             ps.executeUpdate();
@@ -132,11 +137,11 @@ public class PurchaseItemRepository implements GenericRepository<PurchaseItem, I
 
     public boolean update(Connection conn, PurchaseItem item) throws SQLException {
         String sql = "UPDATE purchase_item SET purchase_id = ?, product_id = ?, quantity = ?, "
-                + "unit_cost = ?, line_total = ? WHERE purchase_item_id = ?";
+                + "unit_cost = ?, line_total = ? WHERE purchase_item_id = ? AND deleted_at IS NULL";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, item.getPurchaseId());
             ps.setInt(2, item.getProductId());
-            ps.setBigDecimal(3, item.getQuantity());
+            ps.setInt(3, item.getQuantity());
             ps.setBigDecimal(4, item.getUnitCost());
             ps.setBigDecimal(5, item.getLineTotal());
             ps.setInt(6, item.getPurchaseItemId());
@@ -144,12 +149,14 @@ public class PurchaseItemRepository implements GenericRepository<PurchaseItem, I
         }
     }
 
-    public boolean deleteById(Connection conn, Integer id) throws SQLException {
-        String sql = "DELETE FROM purchase_item WHERE purchase_item_id = ?";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, id);
-            return ps.executeUpdate() > 0;
-        }
+    public boolean softDelete(Connection conn, Integer id) throws SQLException {
+        String sql = "UPDATE purchase_item SET deleted_at = CURRENT_TIMESTAMP(6) WHERE purchase_item_id = ? AND deleted_at IS NULL";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
+    }
+
+    public boolean restore(Connection conn, Integer id) throws SQLException {
+        String sql = "UPDATE purchase_item SET deleted_at = NULL WHERE purchase_item_id = ? AND deleted_at IS NOT NULL";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
     }
 
     private PurchaseItem mapRow(ResultSet rs) throws SQLException {
@@ -157,7 +164,7 @@ public class PurchaseItemRepository implements GenericRepository<PurchaseItem, I
         item.setPurchaseItemId(rs.getInt("purchase_item_id"));
         item.setPurchaseId(rs.getInt("purchase_id"));
         item.setProductId(rs.getInt("product_id"));
-        item.setQuantity(rs.getBigDecimal("quantity"));
+        item.setQuantity(rs.getInt("quantity"));
         item.setUnitCost(rs.getBigDecimal("unit_cost"));
         item.setLineTotal(rs.getBigDecimal("line_total"));
         return item;

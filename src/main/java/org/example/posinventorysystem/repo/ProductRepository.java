@@ -12,7 +12,7 @@ public class ProductRepository implements GenericRepository<Product, Integer> {
 
     private static final String BASE_SELECT =
             "SELECT product_id, barcode, product_name, category_id, unit_id, cost_price, "
-                    + "selling_price, quantity_in_stock, reorder_level FROM product";
+                    + "selling_price, quantity_in_stock, reorder_level, is_active FROM product";
 
     @Override
     public Optional<Product> findById(Integer id) {
@@ -20,6 +20,40 @@ public class ProductRepository implements GenericRepository<Product, Integer> {
             return findById(conn, id);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to find product by id: " + id, e);
+        }
+    }
+
+    public List<Product> findActive() {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findActive(conn);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to fetch active products", e);
+        }
+    }
+
+    public List<Product> findActive(Connection conn) throws SQLException {
+        String sql = BASE_SELECT + " WHERE deleted_at IS NULL AND is_active = 1 ORDER BY product_id";
+        List<Product> products = new ArrayList<>();
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) products.add(mapRow(rs));
+        }
+        return products;
+    }
+
+    public boolean setActive(int productId, boolean active) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return setActive(conn, productId, active);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to change active state for product " + productId, e);
+        }
+    }
+
+    public boolean setActive(Connection conn, int productId, boolean active) throws SQLException {
+        String sql = "UPDATE product SET is_active = ? WHERE product_id = ? AND deleted_at IS NULL";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setBoolean(1, active);
+            ps.setInt(2, productId);
+            return ps.executeUpdate() > 0;
         }
     }
 
@@ -59,11 +93,20 @@ public class ProductRepository implements GenericRepository<Product, Integer> {
     }
 
     @Override
-    public boolean deleteById(Integer id) {
+    public boolean softDelete(Integer id) {
         try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return deleteById(conn, id);
+            return softDelete(conn, id);
         } catch (SQLException e) {
-            throw new RepositoryException("Failed to delete product with id: " + id, e);
+            throw new RepositoryException("Failed to soft-delete product with id: " + id, e);
+        }
+    }
+
+    @Override
+    public boolean restore(Integer id) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return restore(conn, id);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to restore product with id: " + id, e);
         }
     }
 
@@ -94,7 +137,7 @@ public class ProductRepository implements GenericRepository<Product, Integer> {
 
     public boolean adjustStock(Connection conn, int productId, int delta) throws SQLException {
         String sql = "UPDATE product SET quantity_in_stock = quantity_in_stock + ? "
-                + "WHERE product_id = ? AND quantity_in_stock + ? >= 0";
+                + "WHERE product_id = ? AND deleted_at IS NULL AND quantity_in_stock + ? >= 0";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, delta);
             ps.setInt(2, productId);
@@ -106,7 +149,7 @@ public class ProductRepository implements GenericRepository<Product, Integer> {
     }
 
     public Optional<Product> findById(Connection conn, Integer id) throws SQLException {
-        String sql = BASE_SELECT + " WHERE product_id = ?";
+        String sql = BASE_SELECT + " WHERE product_id = ? AND deleted_at IS NULL";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
             try (ResultSet rs = ps.executeQuery()) {
@@ -116,7 +159,7 @@ public class ProductRepository implements GenericRepository<Product, Integer> {
     }
 
     public Optional<Product> findByBarcode(Connection conn, String barcode) throws SQLException {
-        String sql = BASE_SELECT + " WHERE barcode = ?";
+        String sql = BASE_SELECT + " WHERE barcode = ? AND deleted_at IS NULL";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, barcode);
             try (ResultSet rs = ps.executeQuery()) {
@@ -126,7 +169,7 @@ public class ProductRepository implements GenericRepository<Product, Integer> {
     }
 
     public List<Product> findAll(Connection conn) throws SQLException {
-        String sql = BASE_SELECT + " ORDER BY product_id";
+        String sql = BASE_SELECT + " WHERE deleted_at IS NULL ORDER BY product_id";
         List<Product> products = new ArrayList<>();
         try (Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery(sql)) {
@@ -139,7 +182,7 @@ public class ProductRepository implements GenericRepository<Product, Integer> {
 
     public Integer insert(Connection conn, Product product) throws SQLException {
         String sql = "INSERT INTO product (barcode, product_name, category_id, unit_id, cost_price, "
-                + "selling_price, quantity_in_stock, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+                + "selling_price, quantity_in_stock, reorder_level, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, product.getBarcode());
             ps.setString(2, product.getProductName());
@@ -149,6 +192,7 @@ public class ProductRepository implements GenericRepository<Product, Integer> {
             ps.setBigDecimal(6, product.getSellingPrice());
             ps.setInt(7, product.getQuantityInStock());
             ps.setInt(8, product.getReorderLevel());
+            ps.setBoolean(9, product.isActive());
             ps.executeUpdate();
 
             try (ResultSet keys = ps.getGeneratedKeys()) {
@@ -172,8 +216,8 @@ public class ProductRepository implements GenericRepository<Product, Integer> {
      */
     public boolean update(Connection conn, Product product) throws SQLException {
         String sql = "UPDATE product SET barcode = ?, product_name = ?, category_id = ?, unit_id = ?, "
-                + "cost_price = ?, selling_price = ?, quantity_in_stock = ?, reorder_level = ? "
-                + "WHERE product_id = ?";
+                + "cost_price = ?, selling_price = ?, quantity_in_stock = ?, reorder_level = ?, is_active = ? "
+                + "WHERE product_id = ? AND deleted_at IS NULL";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, product.getBarcode());
             ps.setString(2, product.getProductName());
@@ -183,17 +227,20 @@ public class ProductRepository implements GenericRepository<Product, Integer> {
             ps.setBigDecimal(6, product.getSellingPrice());
             ps.setInt(7, product.getQuantityInStock());
             ps.setInt(8, product.getReorderLevel());
-            ps.setInt(9, product.getProductId());
+            ps.setBoolean(9, product.isActive());
+            ps.setInt(10, product.getProductId());
             return ps.executeUpdate() > 0;
         }
     }
 
-    public boolean deleteById(Connection conn, Integer id) throws SQLException {
-        String sql = "DELETE FROM product WHERE product_id = ?";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, id);
-            return ps.executeUpdate() > 0;
-        }
+    public boolean softDelete(Connection conn, Integer id) throws SQLException {
+        String sql = "UPDATE product SET deleted_at = CURRENT_TIMESTAMP(6) WHERE product_id = ? AND deleted_at IS NULL";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
+    }
+
+    public boolean restore(Connection conn, Integer id) throws SQLException {
+        String sql = "UPDATE product SET deleted_at = NULL WHERE product_id = ? AND deleted_at IS NOT NULL";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
     }
 
     private Product mapRow(ResultSet rs) throws SQLException {
@@ -207,6 +254,7 @@ public class ProductRepository implements GenericRepository<Product, Integer> {
         product.setSellingPrice(rs.getBigDecimal("selling_price"));
         product.setQuantityInStock(rs.getInt("quantity_in_stock"));
         product.setReorderLevel(rs.getInt("reorder_level"));
+        product.setActive(rs.getBoolean("is_active"));
         return product;
     }
 }

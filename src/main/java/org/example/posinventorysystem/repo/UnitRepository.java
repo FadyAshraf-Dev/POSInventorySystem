@@ -47,16 +47,25 @@ public class UnitRepository implements GenericRepository<Unit, Integer> {
     }
 
     @Override
-    public boolean deleteById(Integer id) {
+    public boolean softDelete(Integer id) {
         try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return deleteById(conn, id);
+            return softDelete(conn, id);
         } catch (SQLException e) {
-            throw new RepositoryException("Failed to delete unit with id: " + id, e);
+            throw new RepositoryException("Failed to soft-delete unit with id: " + id, e);
+        }
+    }
+
+    @Override
+    public boolean restore(Integer id) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return restore(conn, id);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to restore unit with id: " + id, e);
         }
     }
 
     public Optional<Unit> findById(Connection conn, Integer id) throws SQLException {
-        String sql = "SELECT unit_id, unit_name FROM unit WHERE unit_id = ?";
+        String sql = "SELECT unit_id, unit_name FROM unit WHERE deleted_at IS NULL AND unit_id = ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
             try (ResultSet rs = ps.executeQuery()) {
@@ -66,7 +75,7 @@ public class UnitRepository implements GenericRepository<Unit, Integer> {
     }
 
     public List<Unit> findAll(Connection conn) throws SQLException {
-        String sql = "SELECT unit_id, unit_name FROM unit ORDER BY unit_id";
+        String sql = "SELECT unit_id, unit_name FROM unit WHERE deleted_at IS NULL ORDER BY unit_id";
         List<Unit> units = new ArrayList<>();
         try (Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery(sql)) {
@@ -95,7 +104,7 @@ public class UnitRepository implements GenericRepository<Unit, Integer> {
     }
 
     public boolean update(Connection conn, Unit unit) throws SQLException {
-        String sql = "UPDATE unit SET unit_name = ? WHERE unit_id = ?";
+        String sql = "UPDATE unit SET unit_name = ? WHERE unit_id = ? AND deleted_at IS NULL";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, unit.getUnitName());
             ps.setInt(2, unit.getUnitId());
@@ -103,12 +112,14 @@ public class UnitRepository implements GenericRepository<Unit, Integer> {
         }
     }
 
-    public boolean deleteById(Connection conn, Integer id) throws SQLException {
-        String sql = "DELETE FROM unit WHERE unit_id = ?";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, id);
-            return ps.executeUpdate() > 0;
-        }
+    public boolean softDelete(Connection conn, Integer id) throws SQLException {
+        String sql = "UPDATE unit SET deleted_at = CURRENT_TIMESTAMP(6) WHERE unit_id = ? AND deleted_at IS NULL";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
+    }
+
+    public boolean restore(Connection conn, Integer id) throws SQLException {
+        String sql = "UPDATE unit SET deleted_at = NULL WHERE unit_id = ? AND deleted_at IS NOT NULL";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
     }
 
     private Unit mapRow(ResultSet rs) throws SQLException {
