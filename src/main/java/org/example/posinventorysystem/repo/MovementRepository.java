@@ -16,37 +16,16 @@ public class MovementRepository implements GenericRepository<Movement, Integer> 
 
     @Override
     public Optional<Movement> findById(Integer id) {
-        String sql = BASE_SELECT + " WHERE movement_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setInt(1, id);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return Optional.of(mapRow(rs));
-                }
-                return Optional.empty();
-            }
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findById(conn, id);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to find movement by id: " + id, e);
         }
     }
 
-    /** Convenience lookup — the full stock ledger for one product. */
     public List<Movement> findByProductId(Integer productId) {
-        String sql = BASE_SELECT + " WHERE product_id = ? ORDER BY movement_date, movement_id";
-        List<Movement> movements = new ArrayList<>();
-
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setInt(1, productId);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    movements.add(mapRow(rs));
-                }
-            }
-            return movements;
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findByProductId(conn, productId);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to find movements for product_id: " + productId, e);
         }
@@ -54,17 +33,8 @@ public class MovementRepository implements GenericRepository<Movement, Integer> 
 
     @Override
     public List<Movement> findAll() {
-        String sql = BASE_SELECT + " ORDER BY movement_id";
-        List<Movement> movements = new ArrayList<>();
-
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
-
-            while (rs.next()) {
-                movements.add(mapRow(rs));
-            }
-            return movements;
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findAll(conn);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to fetch all movements", e);
         }
@@ -72,11 +42,81 @@ public class MovementRepository implements GenericRepository<Movement, Integer> 
 
     @Override
     public Integer insert(Movement movement) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return insert(conn, movement);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to insert movement: " + movement, e);
+        }
+    }
+
+    /**
+     * NOTE (review item 4): movement should become insert-only — it's a
+     * stock ledger, so historical entries shouldn't be editable. Left in
+     * place here since splitting GenericRepository into read/write
+     * interfaces is a separate, larger review item.
+     */
+    @Override
+    public boolean update(Movement movement) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return update(conn, movement);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to update movement: " + movement, e);
+        }
+    }
+
+    /**
+     * NOTE (review item 4): movement should be insert-only — no delete.
+     * Left in place here since that's a separate review item.
+     */
+    @Override
+    public boolean deleteById(Integer id) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return deleteById(conn, id);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to delete movement with id: " + id, e);
+        }
+    }
+
+    public Optional<Movement> findById(Connection conn, Integer id) throws SQLException {
+        String sql = BASE_SELECT + " WHERE movement_id = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
+            }
+        }
+    }
+
+    public List<Movement> findByProductId(Connection conn, Integer productId) throws SQLException {
+        String sql = BASE_SELECT + " WHERE product_id = ? ORDER BY movement_date, movement_id";
+        List<Movement> movements = new ArrayList<>();
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, productId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    movements.add(mapRow(rs));
+                }
+            }
+        }
+        return movements;
+    }
+
+    public List<Movement> findAll(Connection conn) throws SQLException {
+        String sql = BASE_SELECT + " ORDER BY movement_id";
+        List<Movement> movements = new ArrayList<>();
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                movements.add(mapRow(rs));
+            }
+        }
+        return movements;
+    }
+
+    public Integer insert(Connection conn, Movement movement) throws SQLException {
         String sql = "INSERT INTO movement (product_id, movement_type, quantity_change, reference_id, "
                 + "user_id, movement_date) VALUES (?, ?, ?, ?, ?, ?)";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setInt(1, movement.getProductId());
             ps.setString(2, movement.getMovementType());
             ps.setInt(3, movement.getQuantityChange());
@@ -95,20 +135,15 @@ public class MovementRepository implements GenericRepository<Movement, Integer> 
                     movement.setMovementId(generatedId);
                     return generatedId;
                 }
-                throw new RepositoryException("Insert succeeded but no generated key was returned for movement");
+                throw new SQLException("Insert succeeded but no generated key was returned for movement");
             }
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to insert movement: " + movement, e);
         }
     }
 
-    @Override
-    public boolean update(Movement movement) {
+    public boolean update(Connection conn, Movement movement) throws SQLException {
         String sql = "UPDATE movement SET product_id = ?, movement_type = ?, quantity_change = ?, "
                 + "reference_id = ?, user_id = ?, movement_date = ? WHERE movement_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, movement.getProductId());
             ps.setString(2, movement.getMovementType());
             ps.setInt(3, movement.getQuantityChange());
@@ -120,23 +155,15 @@ public class MovementRepository implements GenericRepository<Movement, Integer> 
             ps.setInt(5, movement.getUserId());
             ps.setTimestamp(6, Timestamp.valueOf(movement.getMovementDate()));
             ps.setInt(7, movement.getMovementId());
-
             return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to update movement: " + movement, e);
         }
     }
 
-    @Override
-    public boolean deleteById(Integer id) {
+    public boolean deleteById(Connection conn, Integer id) throws SQLException {
         String sql = "DELETE FROM movement WHERE movement_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
             return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to delete movement with id: " + id, e);
         }
     }
 

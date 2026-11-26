@@ -16,37 +16,16 @@ public class PurchaseItemRepository implements GenericRepository<PurchaseItem, I
 
     @Override
     public Optional<PurchaseItem> findById(Integer id) {
-        String sql = BASE_SELECT + " WHERE purchase_item_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setInt(1, id);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return Optional.of(mapRow(rs));
-                }
-                return Optional.empty();
-            }
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findById(conn, id);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to find purchase item by id: " + id, e);
         }
     }
 
-    /** Convenience lookup — line items belonging to one purchase. */
     public List<PurchaseItem> findByPurchaseId(Integer purchaseId) {
-        String sql = BASE_SELECT + " WHERE purchase_id = ? ORDER BY purchase_item_id";
-        List<PurchaseItem> items = new ArrayList<>();
-
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setInt(1, purchaseId);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    items.add(mapRow(rs));
-                }
-            }
-            return items;
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findByPurchaseId(conn, purchaseId);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to find purchase items for purchase_id: " + purchaseId, e);
         }
@@ -54,17 +33,8 @@ public class PurchaseItemRepository implements GenericRepository<PurchaseItem, I
 
     @Override
     public List<PurchaseItem> findAll() {
-        String sql = BASE_SELECT + " ORDER BY purchase_item_id";
-        List<PurchaseItem> items = new ArrayList<>();
-
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
-
-            while (rs.next()) {
-                items.add(mapRow(rs));
-            }
-            return items;
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findAll(conn);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to fetch all purchase items", e);
         }
@@ -72,11 +42,76 @@ public class PurchaseItemRepository implements GenericRepository<PurchaseItem, I
 
     @Override
     public Integer insert(PurchaseItem item) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return insert(conn, item);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to insert purchase item: " + item, e);
+        }
+    }
+
+    @Override
+    public boolean update(PurchaseItem item) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return update(conn, item);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to update purchase item: " + item, e);
+        }
+    }
+
+    /**
+     * NOTE (review item 4): deleteById should be removed from PurchaseItem —
+     * same reasoning as SaleItem. Left in place here since that's a
+     * separate review item.
+     */
+    @Override
+    public boolean deleteById(Integer id) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return deleteById(conn, id);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to delete purchase item with id: " + id, e);
+        }
+    }
+
+    public Optional<PurchaseItem> findById(Connection conn, Integer id) throws SQLException {
+        String sql = BASE_SELECT + " WHERE purchase_item_id = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
+            }
+        }
+    }
+
+    public List<PurchaseItem> findByPurchaseId(Connection conn, Integer purchaseId) throws SQLException {
+        String sql = BASE_SELECT + " WHERE purchase_id = ? ORDER BY purchase_item_id";
+        List<PurchaseItem> items = new ArrayList<>();
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, purchaseId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    items.add(mapRow(rs));
+                }
+            }
+        }
+        return items;
+    }
+
+    public List<PurchaseItem> findAll(Connection conn) throws SQLException {
+        String sql = BASE_SELECT + " ORDER BY purchase_item_id";
+        List<PurchaseItem> items = new ArrayList<>();
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                items.add(mapRow(rs));
+            }
+        }
+        return items;
+    }
+
+    public Integer insert(Connection conn, PurchaseItem item) throws SQLException {
         String sql = "INSERT INTO purchase_item (purchase_id, product_id, quantity, unit_cost, line_total) "
                 + "VALUES (?, ?, ?, ?, ?)";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setInt(1, item.getPurchaseId());
             ps.setInt(2, item.getProductId());
             ps.setBigDecimal(3, item.getQuantity());
@@ -90,43 +125,30 @@ public class PurchaseItemRepository implements GenericRepository<PurchaseItem, I
                     item.setPurchaseItemId(generatedId);
                     return generatedId;
                 }
-                throw new RepositoryException("Insert succeeded but no generated key was returned for purchase item");
+                throw new SQLException("Insert succeeded but no generated key was returned for purchase item");
             }
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to insert purchase item: " + item, e);
         }
     }
 
-    @Override
-    public boolean update(PurchaseItem item) {
+    public boolean update(Connection conn, PurchaseItem item) throws SQLException {
         String sql = "UPDATE purchase_item SET purchase_id = ?, product_id = ?, quantity = ?, "
                 + "unit_cost = ?, line_total = ? WHERE purchase_item_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, item.getPurchaseId());
             ps.setInt(2, item.getProductId());
             ps.setBigDecimal(3, item.getQuantity());
             ps.setBigDecimal(4, item.getUnitCost());
             ps.setBigDecimal(5, item.getLineTotal());
             ps.setInt(6, item.getPurchaseItemId());
-
             return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to update purchase item: " + item, e);
         }
     }
 
-    @Override
-    public boolean deleteById(Integer id) {
+    public boolean deleteById(Connection conn, Integer id) throws SQLException {
         String sql = "DELETE FROM purchase_item WHERE purchase_item_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
             return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to delete purchase item with id: " + id, e);
         }
     }
 

@@ -16,35 +16,16 @@ public class ProductRepository implements GenericRepository<Product, Integer> {
 
     @Override
     public Optional<Product> findById(Integer id) {
-        String sql = BASE_SELECT + " WHERE product_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setInt(1, id);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return Optional.of(mapRow(rs));
-                }
-                return Optional.empty();
-            }
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findById(conn, id);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to find product by id: " + id, e);
         }
     }
 
-    /** Convenience lookup used at the POS scan screen. */
     public Optional<Product> findByBarcode(String barcode) {
-        String sql = BASE_SELECT + " WHERE barcode = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setString(1, barcode);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return Optional.of(mapRow(rs));
-                }
-                return Optional.empty();
-            }
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findByBarcode(conn, barcode);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to find product by barcode: " + barcode, e);
         }
@@ -52,17 +33,8 @@ public class ProductRepository implements GenericRepository<Product, Integer> {
 
     @Override
     public List<Product> findAll() {
-        String sql = BASE_SELECT + " ORDER BY product_id";
-        List<Product> products = new ArrayList<>();
-
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
-
-            while (rs.next()) {
-                products.add(mapRow(rs));
-            }
-            return products;
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findAll(conn);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to fetch all products", e);
         }
@@ -70,11 +42,67 @@ public class ProductRepository implements GenericRepository<Product, Integer> {
 
     @Override
     public Integer insert(Product product) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return insert(conn, product);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to insert product: " + product, e);
+        }
+    }
+
+    @Override
+    public boolean update(Product product) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return update(conn, product);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to update product: " + product, e);
+        }
+    }
+
+    @Override
+    public boolean deleteById(Integer id) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return deleteById(conn, id);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to delete product with id: " + id, e);
+        }
+    }
+
+    public Optional<Product> findById(Connection conn, Integer id) throws SQLException {
+        String sql = BASE_SELECT + " WHERE product_id = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
+            }
+        }
+    }
+
+    public Optional<Product> findByBarcode(Connection conn, String barcode) throws SQLException {
+        String sql = BASE_SELECT + " WHERE barcode = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, barcode);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
+            }
+        }
+    }
+
+    public List<Product> findAll(Connection conn) throws SQLException {
+        String sql = BASE_SELECT + " ORDER BY product_id";
+        List<Product> products = new ArrayList<>();
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                products.add(mapRow(rs));
+            }
+        }
+        return products;
+    }
+
+    public Integer insert(Connection conn, Product product) throws SQLException {
         String sql = "INSERT INTO product (barcode, product_name, category_id, unit_id, cost_price, "
                 + "selling_price, quantity_in_stock, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, product.getBarcode());
             ps.setString(2, product.getProductName());
             ps.setInt(3, product.getCategoryId());
@@ -91,21 +119,24 @@ public class ProductRepository implements GenericRepository<Product, Integer> {
                     product.setProductId(generatedId);
                     return generatedId;
                 }
-                throw new RepositoryException("Insert succeeded but no generated key was returned for product");
+                throw new SQLException("Insert succeeded but no generated key was returned for product");
             }
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to insert product: " + product, e);
         }
     }
 
-    @Override
-    public boolean update(Product product) {
+    /**
+     * NOTE (review item 2): this still writes the whole quantity_in_stock value,
+     * which is unsafe under concurrent sales (lost update). A dedicated
+     * adjustStock(conn, productId, delta) using an atomic
+     * "SET quantity_in_stock = quantity_in_stock + ?" should replace stock
+     * changes going through this method. Left as-is here since that's a
+     * separate review item — flagging so it isn't forgotten.
+     */
+    public boolean update(Connection conn, Product product) throws SQLException {
         String sql = "UPDATE product SET barcode = ?, product_name = ?, category_id = ?, unit_id = ?, "
                 + "cost_price = ?, selling_price = ?, quantity_in_stock = ?, reorder_level = ? "
                 + "WHERE product_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, product.getBarcode());
             ps.setString(2, product.getProductName());
             ps.setInt(3, product.getCategoryId());
@@ -115,23 +146,15 @@ public class ProductRepository implements GenericRepository<Product, Integer> {
             ps.setInt(7, product.getQuantityInStock());
             ps.setInt(8, product.getReorderLevel());
             ps.setInt(9, product.getProductId());
-
             return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to update product: " + product, e);
         }
     }
 
-    @Override
-    public boolean deleteById(Integer id) {
+    public boolean deleteById(Connection conn, Integer id) throws SQLException {
         String sql = "DELETE FROM product WHERE product_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
             return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to delete product with id: " + id, e);
         }
     }
 

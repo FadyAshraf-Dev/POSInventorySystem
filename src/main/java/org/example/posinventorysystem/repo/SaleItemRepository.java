@@ -15,37 +15,16 @@ public class SaleItemRepository implements GenericRepository<SaleItem, Integer> 
 
     @Override
     public Optional<SaleItem> findById(Integer id) {
-        String sql = BASE_SELECT + " WHERE sale_item_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setInt(1, id);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return Optional.of(mapRow(rs));
-                }
-                return Optional.empty();
-            }
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findById(conn, id);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to find sale item by id: " + id, e);
         }
     }
 
-    /** Convenience lookup — fetch all line items belonging to one sale (receipt detail). */
     public List<SaleItem> findBySaleId(Integer saleId) {
-        String sql = BASE_SELECT + " WHERE sale_id = ? ORDER BY sale_item_id";
-        List<SaleItem> items = new ArrayList<>();
-
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setInt(1, saleId);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    items.add(mapRow(rs));
-                }
-            }
-            return items;
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findBySaleId(conn, saleId);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to find sale items for sale_id: " + saleId, e);
         }
@@ -53,17 +32,8 @@ public class SaleItemRepository implements GenericRepository<SaleItem, Integer> 
 
     @Override
     public List<SaleItem> findAll() {
-        String sql = BASE_SELECT + " ORDER BY sale_item_id";
-        List<SaleItem> items = new ArrayList<>();
-
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
-
-            while (rs.next()) {
-                items.add(mapRow(rs));
-            }
-            return items;
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findAll(conn);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to fetch all sale items", e);
         }
@@ -71,11 +41,76 @@ public class SaleItemRepository implements GenericRepository<SaleItem, Integer> 
 
     @Override
     public Integer insert(SaleItem saleItem) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return insert(conn, saleItem);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to insert sale item: " + saleItem, e);
+        }
+    }
+
+    @Override
+    public boolean update(SaleItem saleItem) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return update(conn, saleItem);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to update sale item: " + saleItem, e);
+        }
+    }
+
+    /**
+     * NOTE (review item 4): deleteById should be removed from SaleItem —
+     * cancellation/returns go through Sale.status, not hard deletes of line
+     * items. Left in place here since that's a separate review item.
+     */
+    @Override
+    public boolean deleteById(Integer id) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return deleteById(conn, id);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to delete sale item with id: " + id, e);
+        }
+    }
+
+    public Optional<SaleItem> findById(Connection conn, Integer id) throws SQLException {
+        String sql = BASE_SELECT + " WHERE sale_item_id = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
+            }
+        }
+    }
+
+    public List<SaleItem> findBySaleId(Connection conn, Integer saleId) throws SQLException {
+        String sql = BASE_SELECT + " WHERE sale_id = ? ORDER BY sale_item_id";
+        List<SaleItem> items = new ArrayList<>();
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, saleId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    items.add(mapRow(rs));
+                }
+            }
+        }
+        return items;
+    }
+
+    public List<SaleItem> findAll(Connection conn) throws SQLException {
+        String sql = BASE_SELECT + " ORDER BY sale_item_id";
+        List<SaleItem> items = new ArrayList<>();
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                items.add(mapRow(rs));
+            }
+        }
+        return items;
+    }
+
+    public Integer insert(Connection conn, SaleItem saleItem) throws SQLException {
         String sql = "INSERT INTO sale_item (sale_id, product_id, quantity, unit_price, line_total) "
                 + "VALUES (?, ?, ?, ?, ?)";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setInt(1, saleItem.getSaleId());
             ps.setInt(2, saleItem.getProductId());
             ps.setInt(3, saleItem.getQuantity());
@@ -89,43 +124,30 @@ public class SaleItemRepository implements GenericRepository<SaleItem, Integer> 
                     saleItem.setSaleItemId(generatedId);
                     return generatedId;
                 }
-                throw new RepositoryException("Insert succeeded but no generated key was returned for sale item");
+                throw new SQLException("Insert succeeded but no generated key was returned for sale item");
             }
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to insert sale item: " + saleItem, e);
         }
     }
 
-    @Override
-    public boolean update(SaleItem saleItem) {
+    public boolean update(Connection conn, SaleItem saleItem) throws SQLException {
         String sql = "UPDATE sale_item SET sale_id = ?, product_id = ?, quantity = ?, unit_price = ?, "
                 + "line_total = ? WHERE sale_item_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, saleItem.getSaleId());
             ps.setInt(2, saleItem.getProductId());
             ps.setInt(3, saleItem.getQuantity());
             ps.setBigDecimal(4, saleItem.getUnitPrice());
             ps.setBigDecimal(5, saleItem.getLineTotal());
             ps.setInt(6, saleItem.getSaleItemId());
-
             return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to update sale item: " + saleItem, e);
         }
     }
 
-    @Override
-    public boolean deleteById(Integer id) {
+    public boolean deleteById(Connection conn, Integer id) throws SQLException {
         String sql = "DELETE FROM sale_item WHERE sale_item_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
             return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to delete sale item with id: " + id, e);
         }
     }
 

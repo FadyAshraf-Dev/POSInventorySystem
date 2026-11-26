@@ -15,17 +15,8 @@ public class PurchaseRepository implements GenericRepository<Purchase, Integer> 
 
     @Override
     public Optional<Purchase> findById(Integer id) {
-        String sql = BASE_SELECT + " WHERE purchase_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setInt(1, id);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return Optional.of(mapRow(rs));
-                }
-                return Optional.empty();
-            }
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findById(conn, id);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to find purchase by id: " + id, e);
         }
@@ -33,17 +24,8 @@ public class PurchaseRepository implements GenericRepository<Purchase, Integer> 
 
     @Override
     public List<Purchase> findAll() {
-        String sql = BASE_SELECT + " ORDER BY purchase_id";
-        List<Purchase> purchases = new ArrayList<>();
-
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
-
-            while (rs.next()) {
-                purchases.add(mapRow(rs));
-            }
-            return purchases;
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findAll(conn);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to fetch all purchases", e);
         }
@@ -51,11 +33,62 @@ public class PurchaseRepository implements GenericRepository<Purchase, Integer> 
 
     @Override
     public Integer insert(Purchase purchase) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return insert(conn, purchase);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to insert purchase: " + purchase, e);
+        }
+    }
+
+    @Override
+    public boolean update(Purchase purchase) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return update(conn, purchase);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to update purchase: " + purchase, e);
+        }
+    }
+
+    /**
+     * NOTE (review item 4): deleteById should be removed from Purchase —
+     * same reasoning as Sale (cascades to purchase_item without restoring
+     * stock). Left in place here since that's a separate review item.
+     */
+    @Override
+    public boolean deleteById(Integer id) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return deleteById(conn, id);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to delete purchase with id: " + id, e);
+        }
+    }
+
+    public Optional<Purchase> findById(Connection conn, Integer id) throws SQLException {
+        String sql = BASE_SELECT + " WHERE purchase_id = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
+            }
+        }
+    }
+
+    public List<Purchase> findAll(Connection conn) throws SQLException {
+        String sql = BASE_SELECT + " ORDER BY purchase_id";
+        List<Purchase> purchases = new ArrayList<>();
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                purchases.add(mapRow(rs));
+            }
+        }
+        return purchases;
+    }
+
+    public Integer insert(Connection conn, Purchase purchase) throws SQLException {
         String sql = "INSERT INTO purchase (reference_no, purchase_date, supplier_id, user_id, total) "
                 + "VALUES (?, ?, ?, ?, ?)";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, purchase.getReferenceNo());
             ps.setTimestamp(2, Timestamp.valueOf(purchase.getPurchaseDate()));
             ps.setInt(3, purchase.getSupplierId());
@@ -69,43 +102,30 @@ public class PurchaseRepository implements GenericRepository<Purchase, Integer> 
                     purchase.setPurchaseId(generatedId);
                     return generatedId;
                 }
-                throw new RepositoryException("Insert succeeded but no generated key was returned for purchase");
+                throw new SQLException("Insert succeeded but no generated key was returned for purchase");
             }
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to insert purchase: " + purchase, e);
         }
     }
 
-    @Override
-    public boolean update(Purchase purchase) {
+    public boolean update(Connection conn, Purchase purchase) throws SQLException {
         String sql = "UPDATE purchase SET reference_no = ?, purchase_date = ?, supplier_id = ?, "
                 + "user_id = ?, total = ? WHERE purchase_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, purchase.getReferenceNo());
             ps.setTimestamp(2, Timestamp.valueOf(purchase.getPurchaseDate()));
             ps.setInt(3, purchase.getSupplierId());
             ps.setInt(4, purchase.getUserId());
             ps.setBigDecimal(5, purchase.getTotal());
             ps.setInt(6, purchase.getPurchaseId());
-
             return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to update purchase: " + purchase, e);
         }
     }
 
-    @Override
-    public boolean deleteById(Integer id) {
+    public boolean deleteById(Connection conn, Integer id) throws SQLException {
         String sql = "DELETE FROM purchase WHERE purchase_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
             return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to delete purchase with id: " + id, e);
         }
     }
 

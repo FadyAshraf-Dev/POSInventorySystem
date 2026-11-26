@@ -12,17 +12,8 @@ public class SettingRepository implements GenericRepository<Setting, Integer> {
 
     @Override
     public Optional<Setting> findById(Integer id) {
-        String sql = "SELECT setting_id, store_name, currency, tax_rate FROM setting WHERE setting_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setInt(1, id);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return Optional.of(mapRow(rs));
-                }
-                return Optional.empty();
-            }
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findById(conn, id);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to find setting by id: " + id, e);
         }
@@ -30,17 +21,8 @@ public class SettingRepository implements GenericRepository<Setting, Integer> {
 
     @Override
     public List<Setting> findAll() {
-        String sql = "SELECT setting_id, store_name, currency, tax_rate FROM setting ORDER BY setting_id";
-        List<Setting> settings = new ArrayList<>();
-
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
-
-            while (rs.next()) {
-                settings.add(mapRow(rs));
-            }
-            return settings;
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findAll(conn);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to fetch all settings", e);
         }
@@ -48,10 +30,56 @@ public class SettingRepository implements GenericRepository<Setting, Integer> {
 
     @Override
     public Integer insert(Setting setting) {
-        String sql = "INSERT INTO setting (store_name, currency, tax_rate) VALUES (?, ?, ?)";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return insert(conn, setting);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to insert setting: " + setting, e);
+        }
+    }
 
+    @Override
+    public boolean update(Setting setting) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return update(conn, setting);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to update setting: " + setting, e);
+        }
+    }
+
+    @Override
+    public boolean deleteById(Integer id) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return deleteById(conn, id);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to delete setting with id: " + id, e);
+        }
+    }
+
+    public Optional<Setting> findById(Connection conn, Integer id) throws SQLException {
+        String sql = "SELECT setting_id, store_name, currency, tax_rate FROM setting WHERE setting_id = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
+            }
+        }
+    }
+
+    public List<Setting> findAll(Connection conn) throws SQLException {
+        String sql = "SELECT setting_id, store_name, currency, tax_rate FROM setting ORDER BY setting_id";
+        List<Setting> settings = new ArrayList<>();
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                settings.add(mapRow(rs));
+            }
+        }
+        return settings;
+    }
+
+    public Integer insert(Connection conn, Setting setting) throws SQLException {
+        String sql = "INSERT INTO setting (store_name, currency, tax_rate) VALUES (?, ?, ?)";
+        try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, setting.getStoreName());
             ps.setString(2, setting.getCurrency());
             ps.setBigDecimal(3, setting.getTaxRate());
@@ -63,40 +91,27 @@ public class SettingRepository implements GenericRepository<Setting, Integer> {
                     setting.setSettingId(generatedId);
                     return generatedId;
                 }
-                throw new RepositoryException("Insert succeeded but no generated key was returned for setting");
+                throw new SQLException("Insert succeeded but no generated key was returned for setting");
             }
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to insert setting: " + setting, e);
         }
     }
 
-    @Override
-    public boolean update(Setting setting) {
+    public boolean update(Connection conn, Setting setting) throws SQLException {
         String sql = "UPDATE setting SET store_name = ?, currency = ?, tax_rate = ? WHERE setting_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, setting.getStoreName());
             ps.setString(2, setting.getCurrency());
             ps.setBigDecimal(3, setting.getTaxRate());
             ps.setInt(4, setting.getSettingId());
-
             return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to update setting: " + setting, e);
         }
     }
 
-    @Override
-    public boolean deleteById(Integer id) {
+    public boolean deleteById(Connection conn, Integer id) throws SQLException {
         String sql = "DELETE FROM setting WHERE setting_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
             return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to delete setting with id: " + id, e);
         }
     }
 

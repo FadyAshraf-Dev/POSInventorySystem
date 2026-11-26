@@ -12,17 +12,8 @@ public class CategoryRepository implements GenericRepository<Category, Integer> 
 
     @Override
     public Optional<Category> findById(Integer id) {
-        String sql = "SELECT category_id, category_name FROM category WHERE category_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setInt(1, id);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return Optional.of(mapRow(rs));
-                }
-                return Optional.empty();
-            }
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findById(conn, id);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to find category by id: " + id, e);
         }
@@ -30,17 +21,8 @@ public class CategoryRepository implements GenericRepository<Category, Integer> 
 
     @Override
     public List<Category> findAll() {
-        String sql = "SELECT category_id, category_name FROM category ORDER BY category_id";
-        List<Category> categories = new ArrayList<>();
-
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
-
-            while (rs.next()) {
-                categories.add(mapRow(rs));
-            }
-            return categories;
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findAll(conn);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to fetch all categories", e);
         }
@@ -48,10 +30,56 @@ public class CategoryRepository implements GenericRepository<Category, Integer> 
 
     @Override
     public Integer insert(Category category) {
-        String sql = "INSERT INTO category (category_name) VALUES (?)";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return insert(conn, category);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to insert category: " + category, e);
+        }
+    }
 
+    @Override
+    public boolean update(Category category) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return update(conn, category);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to update category: " + category, e);
+        }
+    }
+
+    @Override
+    public boolean deleteById(Integer id) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return deleteById(conn, id);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to delete category with id: " + id, e);
+        }
+    }
+
+    public Optional<Category> findById(Connection conn, Integer id) throws SQLException {
+        String sql = "SELECT category_id, category_name FROM category WHERE category_id = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
+            }
+        }
+    }
+
+    public List<Category> findAll(Connection conn) throws SQLException {
+        String sql = "SELECT category_id, category_name FROM category ORDER BY category_id";
+        List<Category> categories = new ArrayList<>();
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                categories.add(mapRow(rs));
+            }
+        }
+        return categories;
+    }
+
+    public Integer insert(Connection conn, Category category) throws SQLException {
+        String sql = "INSERT INTO category (category_name) VALUES (?)";
+        try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, category.getCategoryName());
             ps.executeUpdate();
 
@@ -61,38 +89,25 @@ public class CategoryRepository implements GenericRepository<Category, Integer> 
                     category.setCategoryId(generatedId);
                     return generatedId;
                 }
-                throw new RepositoryException("Insert succeeded but no generated key was returned for category");
+                throw new SQLException("Insert succeeded but no generated key was returned for category");
             }
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to insert category: " + category, e);
         }
     }
 
-    @Override
-    public boolean update(Category category) {
+    public boolean update(Connection conn, Category category) throws SQLException {
         String sql = "UPDATE category SET category_name = ? WHERE category_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, category.getCategoryName());
             ps.setInt(2, category.getCategoryId());
-
             return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to update category: " + category, e);
         }
     }
 
-    @Override
-    public boolean deleteById(Integer id) {
+    public boolean deleteById(Connection conn, Integer id) throws SQLException {
         String sql = "DELETE FROM category WHERE category_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
             return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to delete category with id: " + id, e);
         }
     }
 

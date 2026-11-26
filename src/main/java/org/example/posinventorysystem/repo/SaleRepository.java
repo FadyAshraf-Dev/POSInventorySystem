@@ -16,17 +16,8 @@ public class SaleRepository implements GenericRepository<Sale, Integer> {
 
     @Override
     public Optional<Sale> findById(Integer id) {
-        String sql = BASE_SELECT + " WHERE sale_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setInt(1, id);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return Optional.of(mapRow(rs));
-                }
-                return Optional.empty();
-            }
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findById(conn, id);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to find sale by id: " + id, e);
         }
@@ -34,17 +25,8 @@ public class SaleRepository implements GenericRepository<Sale, Integer> {
 
     @Override
     public List<Sale> findAll() {
-        String sql = BASE_SELECT + " ORDER BY sale_id";
-        List<Sale> sales = new ArrayList<>();
-
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
-
-            while (rs.next()) {
-                sales.add(mapRow(rs));
-            }
-            return sales;
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findAll(conn);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to fetch all sales", e);
         }
@@ -52,11 +34,65 @@ public class SaleRepository implements GenericRepository<Sale, Integer> {
 
     @Override
     public Integer insert(Sale sale) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return insert(conn, sale);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to insert sale: " + sale, e);
+        }
+    }
+
+    @Override
+    public boolean update(Sale sale) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return update(conn, sale);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to update sale: " + sale, e);
+        }
+    }
+
+    /**
+     * NOTE (review item 4): deleteById should be removed from Sale once
+     * cancellation/returns go through a status field instead of a hard
+     * delete (sale currently has ON DELETE CASCADE to sale_item/payment,
+     * so deleting an invoice silently wipes its items and payments without
+     * restoring stock). Left in place here since that's a separate review
+     * item — flagging so it isn't forgotten.
+     */
+    @Override
+    public boolean deleteById(Integer id) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return deleteById(conn, id);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to delete sale with id: " + id, e);
+        }
+    }
+
+    public Optional<Sale> findById(Connection conn, Integer id) throws SQLException {
+        String sql = BASE_SELECT + " WHERE sale_id = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
+            }
+        }
+    }
+
+    public List<Sale> findAll(Connection conn) throws SQLException {
+        String sql = BASE_SELECT + " ORDER BY sale_id";
+        List<Sale> sales = new ArrayList<>();
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                sales.add(mapRow(rs));
+            }
+        }
+        return sales;
+    }
+
+    public Integer insert(Connection conn, Sale sale) throws SQLException {
         String sql = "INSERT INTO sale (invoice_no, sale_date, user_id, customer_id, subtotal, "
                 + "discount, tax, total, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, sale.getInvoiceNo());
             ps.setTimestamp(2, Timestamp.valueOf(sale.getSaleDate()));
             ps.setInt(3, sale.getUserId());
@@ -78,20 +114,15 @@ public class SaleRepository implements GenericRepository<Sale, Integer> {
                     sale.setSaleId(generatedId);
                     return generatedId;
                 }
-                throw new RepositoryException("Insert succeeded but no generated key was returned for sale");
+                throw new SQLException("Insert succeeded but no generated key was returned for sale");
             }
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to insert sale: " + sale, e);
         }
     }
 
-    @Override
-    public boolean update(Sale sale) {
+    public boolean update(Connection conn, Sale sale) throws SQLException {
         String sql = "UPDATE sale SET invoice_no = ?, sale_date = ?, user_id = ?, customer_id = ?, "
                 + "subtotal = ?, discount = ?, tax = ?, total = ?, status = ? WHERE sale_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, sale.getInvoiceNo());
             ps.setTimestamp(2, Timestamp.valueOf(sale.getSaleDate()));
             ps.setInt(3, sale.getUserId());
@@ -106,23 +137,15 @@ public class SaleRepository implements GenericRepository<Sale, Integer> {
             ps.setBigDecimal(8, sale.getTotal());
             ps.setString(9, sale.getStatus());
             ps.setInt(10, sale.getSaleId());
-
             return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to update sale: " + sale, e);
         }
     }
 
-    @Override
-    public boolean deleteById(Integer id) {
+    public boolean deleteById(Connection conn, Integer id) throws SQLException {
         String sql = "DELETE FROM sale WHERE sale_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
             return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to delete sale with id: " + id, e);
         }
     }
 

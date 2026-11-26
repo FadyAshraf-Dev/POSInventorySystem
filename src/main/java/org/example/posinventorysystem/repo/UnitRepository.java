@@ -12,17 +12,8 @@ public class UnitRepository implements GenericRepository<Unit, Integer> {
 
     @Override
     public Optional<Unit> findById(Integer id) {
-        String sql = "SELECT unit_id, unit_name FROM unit WHERE unit_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setInt(1, id);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return Optional.of(mapRow(rs));
-                }
-                return Optional.empty();
-            }
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findById(conn, id);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to find unit by id: " + id, e);
         }
@@ -30,17 +21,8 @@ public class UnitRepository implements GenericRepository<Unit, Integer> {
 
     @Override
     public List<Unit> findAll() {
-        String sql = "SELECT unit_id, unit_name FROM unit ORDER BY unit_id";
-        List<Unit> units = new ArrayList<>();
-
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
-
-            while (rs.next()) {
-                units.add(mapRow(rs));
-            }
-            return units;
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findAll(conn);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to fetch all units", e);
         }
@@ -48,10 +30,56 @@ public class UnitRepository implements GenericRepository<Unit, Integer> {
 
     @Override
     public Integer insert(Unit unit) {
-        String sql = "INSERT INTO unit (unit_name) VALUES (?)";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return insert(conn, unit);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to insert unit: " + unit, e);
+        }
+    }
 
+    @Override
+    public boolean update(Unit unit) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return update(conn, unit);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to update unit: " + unit, e);
+        }
+    }
+
+    @Override
+    public boolean deleteById(Integer id) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return deleteById(conn, id);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to delete unit with id: " + id, e);
+        }
+    }
+
+    public Optional<Unit> findById(Connection conn, Integer id) throws SQLException {
+        String sql = "SELECT unit_id, unit_name FROM unit WHERE unit_id = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
+            }
+        }
+    }
+
+    public List<Unit> findAll(Connection conn) throws SQLException {
+        String sql = "SELECT unit_id, unit_name FROM unit ORDER BY unit_id";
+        List<Unit> units = new ArrayList<>();
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                units.add(mapRow(rs));
+            }
+        }
+        return units;
+    }
+
+    public Integer insert(Connection conn, Unit unit) throws SQLException {
+        String sql = "INSERT INTO unit (unit_name) VALUES (?)";
+        try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, unit.getUnitName());
             ps.executeUpdate();
 
@@ -61,38 +89,25 @@ public class UnitRepository implements GenericRepository<Unit, Integer> {
                     unit.setUnitId(generatedId);
                     return generatedId;
                 }
-                throw new RepositoryException("Insert succeeded but no generated key was returned for unit");
+                throw new SQLException("Insert succeeded but no generated key was returned for unit");
             }
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to insert unit: " + unit, e);
         }
     }
 
-    @Override
-    public boolean update(Unit unit) {
+    public boolean update(Connection conn, Unit unit) throws SQLException {
         String sql = "UPDATE unit SET unit_name = ? WHERE unit_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, unit.getUnitName());
             ps.setInt(2, unit.getUnitId());
-
             return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to update unit: " + unit, e);
         }
     }
 
-    @Override
-    public boolean deleteById(Integer id) {
+    public boolean deleteById(Connection conn, Integer id) throws SQLException {
         String sql = "DELETE FROM unit WHERE unit_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
             return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to delete unit with id: " + id, e);
         }
     }
 

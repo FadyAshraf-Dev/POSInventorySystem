@@ -10,19 +10,17 @@ import java.util.Optional;
 
 public class RoleRepository implements GenericRepository<Role, Integer> {
 
+    // ------------------------------------------------------------
+    // Public API (GenericRepository) — opens its own connection,
+    // auto-commits, and delegates to the (Connection, ...) overload.
+    // Safe to call directly for single-statement operations that
+    // don't need to be part of a larger transaction.
+    // ------------------------------------------------------------
+
     @Override
     public Optional<Role> findById(Integer id) {
-        String sql = "SELECT role_id, role_name FROM role WHERE role_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setInt(1, id);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return Optional.of(mapRow(rs));
-                }
-                return Optional.empty();
-            }
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findById(conn, id);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to find role by id: " + id, e);
         }
@@ -30,17 +28,8 @@ public class RoleRepository implements GenericRepository<Role, Integer> {
 
     @Override
     public List<Role> findAll() {
-        String sql = "SELECT role_id, role_name FROM role ORDER BY role_id";
-        List<Role> roles = new ArrayList<>();
-
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
-
-            while (rs.next()) {
-                roles.add(mapRow(rs));
-            }
-            return roles;
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findAll(conn);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to fetch all roles", e);
         }
@@ -48,10 +37,64 @@ public class RoleRepository implements GenericRepository<Role, Integer> {
 
     @Override
     public Integer insert(Role role) {
-        String sql = "INSERT INTO role (role_name) VALUES (?)";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return insert(conn, role);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to insert role: " + role, e);
+        }
+    }
 
+    @Override
+    public boolean update(Role role) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return update(conn, role);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to update role: " + role, e);
+        }
+    }
+
+    @Override
+    public boolean deleteById(Integer id) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return deleteById(conn, id);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to delete role with id: " + id, e);
+        }
+    }
+
+    // ------------------------------------------------------------
+    // Connection-accepting overloads — the real implementations.
+    // Call these directly (passing a shared Connection) from inside
+    // TransactionManager.run(...) so multiple repo calls share one
+    // transaction. These throw checked SQLException on purpose —
+    // TransactionManager catches it and rolls back.
+    // ------------------------------------------------------------
+
+    public Optional<Role> findById(Connection conn, Integer id) throws SQLException {
+        String sql = "SELECT role_id, role_name FROM role WHERE role_id = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
+            }
+        }
+    }
+
+    public List<Role> findAll(Connection conn) throws SQLException {
+        String sql = "SELECT role_id, role_name FROM role ORDER BY role_id";
+        List<Role> roles = new ArrayList<>();
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                roles.add(mapRow(rs));
+            }
+        }
+        return roles;
+    }
+
+    public Integer insert(Connection conn, Role role) throws SQLException {
+        String sql = "INSERT INTO role (role_name) VALUES (?)";
+        try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, role.getRoleName());
             ps.executeUpdate();
 
@@ -61,38 +104,25 @@ public class RoleRepository implements GenericRepository<Role, Integer> {
                     role.setRoleId(generatedId);
                     return generatedId;
                 }
-                throw new RepositoryException("Insert succeeded but no generated key was returned for role");
+                throw new SQLException("Insert succeeded but no generated key was returned for role");
             }
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to insert role: " + role, e);
         }
     }
 
-    @Override
-    public boolean update(Role role) {
+    public boolean update(Connection conn, Role role) throws SQLException {
         String sql = "UPDATE role SET role_name = ? WHERE role_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, role.getRoleName());
             ps.setInt(2, role.getRoleId());
-
             return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to update role: " + role, e);
         }
     }
 
-    @Override
-    public boolean deleteById(Integer id) {
+    public boolean deleteById(Connection conn, Integer id) throws SQLException {
         String sql = "DELETE FROM role WHERE role_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
             return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to delete role with id: " + id, e);
         }
     }
 

@@ -15,35 +15,16 @@ public class UserRepository implements GenericRepository<User, Integer> {
 
     @Override
     public Optional<User> findById(Integer id) {
-        String sql = BASE_SELECT + " WHERE user_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setInt(1, id);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return Optional.of(mapRow(rs));
-                }
-                return Optional.empty();
-            }
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findById(conn, id);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to find user by id: " + id, e);
         }
     }
 
-    /** Convenience lookup used at login time — username is UNIQUE in the schema. */
     public Optional<User> findByUsername(String username) {
-        String sql = BASE_SELECT + " WHERE username = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setString(1, username);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return Optional.of(mapRow(rs));
-                }
-                return Optional.empty();
-            }
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findByUsername(conn, username);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to find user by username: " + username, e);
         }
@@ -51,17 +32,8 @@ public class UserRepository implements GenericRepository<User, Integer> {
 
     @Override
     public List<User> findAll() {
-        String sql = BASE_SELECT + " ORDER BY user_id";
-        List<User> users = new ArrayList<>();
-
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
-
-            while (rs.next()) {
-                users.add(mapRow(rs));
-            }
-            return users;
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findAll(conn);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to fetch all users", e);
         }
@@ -69,11 +41,67 @@ public class UserRepository implements GenericRepository<User, Integer> {
 
     @Override
     public Integer insert(User user) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return insert(conn, user);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to insert user: " + user, e);
+        }
+    }
+
+    @Override
+    public boolean update(User user) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return update(conn, user);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to update user: " + user, e);
+        }
+    }
+
+    @Override
+    public boolean deleteById(Integer id) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return deleteById(conn, id);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to delete user with id: " + id, e);
+        }
+    }
+
+    public Optional<User> findById(Connection conn, Integer id) throws SQLException {
+        String sql = BASE_SELECT + " WHERE user_id = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
+            }
+        }
+    }
+
+    public Optional<User> findByUsername(Connection conn, String username) throws SQLException {
+        String sql = BASE_SELECT + " WHERE username = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, username);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
+            }
+        }
+    }
+
+    public List<User> findAll(Connection conn) throws SQLException {
+        String sql = BASE_SELECT + " ORDER BY user_id";
+        List<User> users = new ArrayList<>();
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                users.add(mapRow(rs));
+            }
+        }
+        return users;
+    }
+
+    public Integer insert(Connection conn, User user) throws SQLException {
         String sql = "INSERT INTO user (full_name, username, password_hash, role_id, is_active) "
                 + "VALUES (?, ?, ?, ?, ?)";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, user.getFullName());
             ps.setString(2, user.getUsername());
             ps.setString(3, user.getPasswordHash());
@@ -87,43 +115,37 @@ public class UserRepository implements GenericRepository<User, Integer> {
                     user.setUserId(generatedId);
                     return generatedId;
                 }
-                throw new RepositoryException("Insert succeeded but no generated key was returned for user");
+                throw new SQLException("Insert succeeded but no generated key was returned for user");
             }
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to insert user: " + user, e);
         }
     }
 
-    @Override
-    public boolean update(User user) {
+    /**
+     * NOTE (review item 9): this full update() still rewrites password_hash every
+     * call. A User object loaded without the hash populated would wipe it.
+     * A dedicated updatePassword(conn, userId, hash) should be added separately
+     * and this update() should stop touching password_hash — left as-is here
+     * since that's a distinct review item; flagging so it isn't forgotten.
+     */
+    public boolean update(Connection conn, User user) throws SQLException {
         String sql = "UPDATE user SET full_name = ?, username = ?, password_hash = ?, "
                 + "role_id = ?, is_active = ? WHERE user_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, user.getFullName());
             ps.setString(2, user.getUsername());
             ps.setString(3, user.getPasswordHash());
             ps.setInt(4, user.getRoleId());
             ps.setBoolean(5, user.isActive());
             ps.setInt(6, user.getUserId());
-
             return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to update user: " + user, e);
         }
     }
 
-    @Override
-    public boolean deleteById(Integer id) {
+    public boolean deleteById(Connection conn, Integer id) throws SQLException {
         String sql = "DELETE FROM user WHERE user_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
             return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to delete user with id: " + id, e);
         }
     }
 

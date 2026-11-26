@@ -15,37 +15,16 @@ public class PaymentRepository implements GenericRepository<Payment, Integer> {
 
     @Override
     public Optional<Payment> findById(Integer id) {
-        String sql = BASE_SELECT + " WHERE payment_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setInt(1, id);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return Optional.of(mapRow(rs));
-                }
-                return Optional.empty();
-            }
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findById(conn, id);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to find payment by id: " + id, e);
         }
     }
 
-    /** Convenience lookup — payments made against one sale (a sale can be split across methods). */
     public List<Payment> findBySaleId(Integer saleId) {
-        String sql = BASE_SELECT + " WHERE sale_id = ? ORDER BY payment_id";
-        List<Payment> payments = new ArrayList<>();
-
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setInt(1, saleId);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    payments.add(mapRow(rs));
-                }
-            }
-            return payments;
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findBySaleId(conn, saleId);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to find payments for sale_id: " + saleId, e);
         }
@@ -53,17 +32,8 @@ public class PaymentRepository implements GenericRepository<Payment, Integer> {
 
     @Override
     public List<Payment> findAll() {
-        String sql = BASE_SELECT + " ORDER BY payment_id";
-        List<Payment> payments = new ArrayList<>();
-
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
-
-            while (rs.next()) {
-                payments.add(mapRow(rs));
-            }
-            return payments;
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findAll(conn);
         } catch (SQLException e) {
             throw new RepositoryException("Failed to fetch all payments", e);
         }
@@ -71,10 +41,80 @@ public class PaymentRepository implements GenericRepository<Payment, Integer> {
 
     @Override
     public Integer insert(Payment payment) {
-        String sql = "INSERT INTO payment (sale_id, method, amount, payment_date) VALUES (?, ?, ?, ?)";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return insert(conn, payment);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to insert payment: " + payment, e);
+        }
+    }
 
+    /**
+     * NOTE (review item 4): payment should become insert-only — a financial
+     * ledger shouldn't support update after the fact. Left in place here
+     * since splitting GenericRepository into read/write interfaces is a
+     * separate, larger review item.
+     */
+    @Override
+    public boolean update(Payment payment) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return update(conn, payment);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to update payment: " + payment, e);
+        }
+    }
+
+    /**
+     * NOTE (review item 4): payment should be insert-only — no delete.
+     * Left in place here since that's a separate review item.
+     */
+    @Override
+    public boolean deleteById(Integer id) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return deleteById(conn, id);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to delete payment with id: " + id, e);
+        }
+    }
+
+    public Optional<Payment> findById(Connection conn, Integer id) throws SQLException {
+        String sql = BASE_SELECT + " WHERE payment_id = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
+            }
+        }
+    }
+
+    public List<Payment> findBySaleId(Connection conn, Integer saleId) throws SQLException {
+        String sql = BASE_SELECT + " WHERE sale_id = ? ORDER BY payment_id";
+        List<Payment> payments = new ArrayList<>();
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, saleId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    payments.add(mapRow(rs));
+                }
+            }
+        }
+        return payments;
+    }
+
+    public List<Payment> findAll(Connection conn) throws SQLException {
+        String sql = BASE_SELECT + " ORDER BY payment_id";
+        List<Payment> payments = new ArrayList<>();
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                payments.add(mapRow(rs));
+            }
+        }
+        return payments;
+    }
+
+    public Integer insert(Connection conn, Payment payment) throws SQLException {
+        String sql = "INSERT INTO payment (sale_id, method, amount, payment_date) VALUES (?, ?, ?, ?)";
+        try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setInt(1, payment.getSaleId());
             ps.setString(2, payment.getMethod());
             ps.setBigDecimal(3, payment.getAmount());
@@ -87,42 +127,29 @@ public class PaymentRepository implements GenericRepository<Payment, Integer> {
                     payment.setPaymentId(generatedId);
                     return generatedId;
                 }
-                throw new RepositoryException("Insert succeeded but no generated key was returned for payment");
+                throw new SQLException("Insert succeeded but no generated key was returned for payment");
             }
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to insert payment: " + payment, e);
         }
     }
 
-    @Override
-    public boolean update(Payment payment) {
+    public boolean update(Connection conn, Payment payment) throws SQLException {
         String sql = "UPDATE payment SET sale_id = ?, method = ?, amount = ?, payment_date = ? "
                 + "WHERE payment_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, payment.getSaleId());
             ps.setString(2, payment.getMethod());
             ps.setBigDecimal(3, payment.getAmount());
             ps.setTimestamp(4, Timestamp.valueOf(payment.getPaymentDate()));
             ps.setInt(5, payment.getPaymentId());
-
             return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to update payment: " + payment, e);
         }
     }
 
-    @Override
-    public boolean deleteById(Integer id) {
+    public boolean deleteById(Connection conn, Integer id) throws SQLException {
         String sql = "DELETE FROM payment WHERE payment_id = ?";
-        try (Connection conn = HikariDatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
             return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to delete payment with id: " + id, e);
         }
     }
 
