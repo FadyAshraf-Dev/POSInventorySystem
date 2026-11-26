@@ -4,7 +4,6 @@ import org.example.posinventorysystem.data.HikariDatabaseConfig;
 import org.example.posinventorysystem.model.SaleItem;
 
 import java.sql.*;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -24,11 +23,7 @@ public class SaleItemRepository implements GenericRepository<SaleItem, Integer> 
 
     @Override
     public List<SaleItem> findAll() {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findAll(conn);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to fetch all sale items", e);
-        }
+        return JdbcExecutor.withConnection("Failed to fetch all sale items", this::findAll);
     }
 
     @Override
@@ -54,86 +49,52 @@ public class SaleItemRepository implements GenericRepository<SaleItem, Integer> 
 
     public Optional<SaleItem> findById(Connection conn, Integer id) throws SQLException {
         String sql = BASE_SELECT + " WHERE sale_item_id = ? AND deleted_at IS NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, id);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
-            }
-        }
+        return JdbcExecutor.queryOne(conn, sql, ps -> { ps.setInt(1, id); }, this::mapRow);
     }
 
     public List<SaleItem> findBySaleId(Connection conn, Integer saleId) throws SQLException {
         String sql = BASE_SELECT + " WHERE sale_id = ? AND deleted_at IS NULL ORDER BY sale_item_id";
-        List<SaleItem> items = new ArrayList<>();
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, saleId);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    items.add(mapRow(rs));
-                }
-            }
-        }
-        return items;
+        return JdbcExecutor.query(conn, sql, ps -> { ps.setInt(1, saleId); }, this::mapRow);
     }
 
     public List<SaleItem> findAll(Connection conn) throws SQLException {
         String sql = BASE_SELECT + " WHERE deleted_at IS NULL ORDER BY sale_item_id";
-        List<SaleItem> items = new ArrayList<>();
-        try (Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
-            while (rs.next()) {
-                items.add(mapRow(rs));
-            }
-        }
-        return items;
+        return JdbcExecutor.query(conn, sql, ps -> { }, this::mapRow);
     }
 
     public Integer insert(Connection conn, SaleItem saleItem) throws SQLException {
         String sql = "INSERT INTO sale_item (sale_id, product_id, quantity, unit_price, discount, line_total) "
                 + "VALUES (?, ?, ?, ?, ?, ?)";
-        try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            ps.setInt(1, saleItem.getSaleId());
+        int generatedId = JdbcExecutor.executeInsert(conn, sql, ps -> { ps.setInt(1, saleItem.getSaleId());
             ps.setInt(2, saleItem.getProductId());
             ps.setInt(3, saleItem.getQuantity());
             ps.setBigDecimal(4, saleItem.getUnitPrice());
             ps.setBigDecimal(5, saleItem.getDiscount());
-            ps.setBigDecimal(6, saleItem.getLineTotal());
-            ps.executeUpdate();
-
-            try (ResultSet keys = ps.getGeneratedKeys()) {
-                if (keys.next()) {
-                    int generatedId = keys.getInt(1);
-                    saleItem.setSaleItemId(generatedId);
-                    return generatedId;
-                }
-                throw new SQLException("Insert succeeded but no generated key was returned for sale item");
-            }
-        }
+            ps.setBigDecimal(6, saleItem.getLineTotal()); });
+        saleItem.setSaleItemId(generatedId);
+        return generatedId;
     }
 
     public boolean update(Connection conn, SaleItem saleItem) throws SQLException {
         String sql = "UPDATE sale_item SET sale_id = ?, product_id = ?, quantity = ?, unit_price = ?, "
                 + "discount = ?, line_total = ? WHERE sale_item_id = ? AND deleted_at IS NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, saleItem.getSaleId());
+        return JdbcExecutor.executeUpdate(conn, sql, ps -> { ps.setInt(1, saleItem.getSaleId());
             ps.setInt(2, saleItem.getProductId());
             ps.setInt(3, saleItem.getQuantity());
             ps.setBigDecimal(4, saleItem.getUnitPrice());
             ps.setBigDecimal(5, saleItem.getDiscount());
             ps.setBigDecimal(6, saleItem.getLineTotal());
-            ps.setInt(7, saleItem.getSaleItemId());
-            return ps.executeUpdate() > 0;
-        }
+            ps.setInt(7, saleItem.getSaleItemId()); }) > 0;
     }
 
     public boolean softDelete(Connection conn, Integer id) throws SQLException {
         String sql = "UPDATE sale_item SET deleted_at = CURRENT_TIMESTAMP(6) WHERE sale_item_id = ? AND deleted_at IS NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
+        return JdbcExecutor.executeUpdate(conn, sql, ps -> { ps.setInt(1, id); }) > 0;
     }
 
     public boolean restore(Connection conn, Integer id) throws SQLException {
         String sql = "UPDATE sale_item SET deleted_at = NULL WHERE sale_item_id = ? AND deleted_at IS NOT NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
+        return JdbcExecutor.executeUpdate(conn, sql, ps -> { ps.setInt(1, id); }) > 0;
     }
 
     private SaleItem mapRow(ResultSet rs) throws SQLException {

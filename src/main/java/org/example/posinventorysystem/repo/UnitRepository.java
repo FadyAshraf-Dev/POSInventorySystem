@@ -4,7 +4,6 @@ import org.example.posinventorysystem.data.HikariDatabaseConfig;
 import org.example.posinventorysystem.model.Unit;
 
 import java.sql.*;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -17,11 +16,7 @@ public class UnitRepository implements GenericRepository<Unit, Integer> {
 
     @Override
     public List<Unit> findAll() {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findAll(conn);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to fetch all units", e);
-        }
+        return JdbcExecutor.withConnection("Failed to fetch all units", this::findAll);
     }
 
     @Override
@@ -46,60 +41,35 @@ public class UnitRepository implements GenericRepository<Unit, Integer> {
 
     public Optional<Unit> findById(Connection conn, Integer id) throws SQLException {
         String sql = "SELECT unit_id, unit_name FROM unit WHERE deleted_at IS NULL AND unit_id = ?";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, id);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
-            }
-        }
+        return JdbcExecutor.queryOne(conn, sql, ps -> { ps.setInt(1, id); }, this::mapRow);
     }
 
     public List<Unit> findAll(Connection conn) throws SQLException {
         String sql = "SELECT unit_id, unit_name FROM unit WHERE deleted_at IS NULL ORDER BY unit_id";
-        List<Unit> units = new ArrayList<>();
-        try (Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
-            while (rs.next()) {
-                units.add(mapRow(rs));
-            }
-        }
-        return units;
+        return JdbcExecutor.query(conn, sql, ps -> { }, this::mapRow);
     }
 
     public Integer insert(Connection conn, Unit unit) throws SQLException {
         String sql = "INSERT INTO unit (unit_name) VALUES (?)";
-        try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            ps.setString(1, unit.getUnitName());
-            ps.executeUpdate();
-
-            try (ResultSet keys = ps.getGeneratedKeys()) {
-                if (keys.next()) {
-                    int generatedId = keys.getInt(1);
-                    unit.setUnitId(generatedId);
-                    return generatedId;
-                }
-                throw new SQLException("Insert succeeded but no generated key was returned for unit");
-            }
-        }
+        int generatedId = JdbcExecutor.executeInsert(conn, sql, ps -> { ps.setString(1, unit.getUnitName()); });
+        unit.setUnitId(generatedId);
+        return generatedId;
     }
 
     public boolean update(Connection conn, Unit unit) throws SQLException {
         String sql = "UPDATE unit SET unit_name = ? WHERE unit_id = ? AND deleted_at IS NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, unit.getUnitName());
-            ps.setInt(2, unit.getUnitId());
-            return ps.executeUpdate() > 0;
-        }
+        return JdbcExecutor.executeUpdate(conn, sql, ps -> { ps.setString(1, unit.getUnitName());
+            ps.setInt(2, unit.getUnitId()); }) > 0;
     }
 
     public boolean softDelete(Connection conn, Integer id) throws SQLException {
         String sql = "UPDATE unit SET deleted_at = CURRENT_TIMESTAMP(6) WHERE unit_id = ? AND deleted_at IS NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
+        return JdbcExecutor.executeUpdate(conn, sql, ps -> { ps.setInt(1, id); }) > 0;
     }
 
     public boolean restore(Connection conn, Integer id) throws SQLException {
         String sql = "UPDATE unit SET deleted_at = NULL WHERE unit_id = ? AND deleted_at IS NOT NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
+        return JdbcExecutor.executeUpdate(conn, sql, ps -> { ps.setInt(1, id); }) > 0;
     }
 
     private Unit mapRow(ResultSet rs) throws SQLException {

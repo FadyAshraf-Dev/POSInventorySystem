@@ -4,7 +4,6 @@ import org.example.posinventorysystem.data.HikariDatabaseConfig;
 import org.example.posinventorysystem.model.Supplier;
 
 import java.sql.*;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -17,11 +16,7 @@ public class SupplierRepository implements GenericRepository<Supplier, Integer> 
 
     @Override
     public List<Supplier> findAll() {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findAll(conn);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to fetch all suppliers", e);
-        }
+        return JdbcExecutor.withConnection("Failed to fetch all suppliers", this::findAll);
     }
 
     @Override
@@ -46,64 +41,39 @@ public class SupplierRepository implements GenericRepository<Supplier, Integer> 
 
     public Optional<Supplier> findById(Connection conn, Integer id) throws SQLException {
         String sql = "SELECT supplier_id, supplier_name, phone, address FROM supplier WHERE deleted_at IS NULL AND supplier_id = ?";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, id);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
-            }
-        }
+        return JdbcExecutor.queryOne(conn, sql, ps -> { ps.setInt(1, id); }, this::mapRow);
     }
 
     public List<Supplier> findAll(Connection conn) throws SQLException {
         String sql = "SELECT supplier_id, supplier_name, phone, address FROM supplier WHERE deleted_at IS NULL ORDER BY supplier_id";
-        List<Supplier> suppliers = new ArrayList<>();
-        try (Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
-            while (rs.next()) {
-                suppliers.add(mapRow(rs));
-            }
-        }
-        return suppliers;
+        return JdbcExecutor.query(conn, sql, ps -> { }, this::mapRow);
     }
 
     public Integer insert(Connection conn, Supplier supplier) throws SQLException {
         String sql = "INSERT INTO supplier (supplier_name, phone, address) VALUES (?, ?, ?)";
-        try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            ps.setString(1, supplier.getSupplierName());
+        int generatedId = JdbcExecutor.executeInsert(conn, sql, ps -> { ps.setString(1, supplier.getSupplierName());
             ps.setString(2, supplier.getPhone());
-            ps.setString(3, supplier.getAddress());
-            ps.executeUpdate();
-
-            try (ResultSet keys = ps.getGeneratedKeys()) {
-                if (keys.next()) {
-                    int generatedId = keys.getInt(1);
-                    supplier.setSupplierId(generatedId);
-                    return generatedId;
-                }
-                throw new SQLException("Insert succeeded but no generated key was returned for supplier");
-            }
-        }
+            ps.setString(3, supplier.getAddress()); });
+        supplier.setSupplierId(generatedId);
+        return generatedId;
     }
 
     public boolean update(Connection conn, Supplier supplier) throws SQLException {
         String sql = "UPDATE supplier SET supplier_name = ?, phone = ?, address = ? WHERE supplier_id = ? AND deleted_at IS NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, supplier.getSupplierName());
+        return JdbcExecutor.executeUpdate(conn, sql, ps -> { ps.setString(1, supplier.getSupplierName());
             ps.setString(2, supplier.getPhone());
             ps.setString(3, supplier.getAddress());
-            ps.setInt(4, supplier.getSupplierId());
-            return ps.executeUpdate() > 0;
-        }
+            ps.setInt(4, supplier.getSupplierId()); }) > 0;
     }
 
     public boolean softDelete(Connection conn, Integer id) throws SQLException {
         String sql = "UPDATE supplier SET deleted_at = CURRENT_TIMESTAMP(6) WHERE supplier_id = ? AND deleted_at IS NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
+        return JdbcExecutor.executeUpdate(conn, sql, ps -> { ps.setInt(1, id); }) > 0;
     }
 
     public boolean restore(Connection conn, Integer id) throws SQLException {
         String sql = "UPDATE supplier SET deleted_at = NULL WHERE supplier_id = ? AND deleted_at IS NOT NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
+        return JdbcExecutor.executeUpdate(conn, sql, ps -> { ps.setInt(1, id); }) > 0;
     }
 
     private Supplier mapRow(ResultSet rs) throws SQLException {
@@ -124,14 +94,11 @@ public class SupplierRepository implements GenericRepository<Supplier, Integer> 
         if (term == null || term.isBlank()) return List.of();
         String sql = "SELECT supplier_id, supplier_name, phone, address FROM supplier WHERE deleted_at IS NULL AND (LOWER(COALESCE(supplier_name, '')) LIKE ? OR LOWER(COALESCE(phone, '')) LIKE ? OR LOWER(COALESCE(address, '')) LIKE ?) ORDER BY supplier_name, supplier_id";
         String pattern = "%" + term.trim().toLowerCase() + "%";
-        List<Supplier> rows = new ArrayList<>();
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            for (int i = 1; i <= 3; i++) ps.setString(i, pattern);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) rows.add(mapRow(rs));
-            }
-        }
-        return rows;
+        return JdbcExecutor.query(conn, sql, ps -> {
+            ps.setString(1, pattern);
+            ps.setString(2, pattern);
+            ps.setString(3, pattern);
+        }, this::mapRow);
     }
 
     /** Returns true if any purchase record references this supplier, including historical/soft-deleted records. */
@@ -141,10 +108,7 @@ public class SupplierRepository implements GenericRepository<Supplier, Integer> 
 
     public boolean hasPurchases(Connection conn, Integer id) throws SQLException {
         String sql = "SELECT 1 FROM purchase WHERE supplier_id = ? LIMIT 1";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, id);
-            try (ResultSet rs = ps.executeQuery()) { return rs.next(); }
-        }
+        return JdbcExecutor.exists(conn, sql, ps -> { ps.setInt(1, id); });
     }
 
 }

@@ -4,7 +4,6 @@ import org.example.posinventorysystem.data.HikariDatabaseConfig;
 import org.example.posinventorysystem.model.Role;
 
 import java.sql.*;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -24,11 +23,7 @@ public class RoleRepository implements GenericRepository<Role, Integer> {
 
     @Override
     public List<Role> findAll() {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findAll(conn);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to fetch all roles", e);
-        }
+        return JdbcExecutor.withConnection("Failed to fetch all roles", this::findAll);
     }
 
     @Override
@@ -61,60 +56,35 @@ public class RoleRepository implements GenericRepository<Role, Integer> {
 
     public Optional<Role> findById(Connection conn, Integer id) throws SQLException {
         String sql = "SELECT role_id, role_name FROM role WHERE deleted_at IS NULL AND role_id = ?";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, id);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
-            }
-        }
+        return JdbcExecutor.queryOne(conn, sql, ps -> { ps.setInt(1, id); }, this::mapRow);
     }
 
     public List<Role> findAll(Connection conn) throws SQLException {
         String sql = "SELECT role_id, role_name FROM role WHERE deleted_at IS NULL ORDER BY role_id";
-        List<Role> roles = new ArrayList<>();
-        try (Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
-            while (rs.next()) {
-                roles.add(mapRow(rs));
-            }
-        }
-        return roles;
+        return JdbcExecutor.query(conn, sql, ps -> { }, this::mapRow);
     }
 
     public Integer insert(Connection conn, Role role) throws SQLException {
         String sql = "INSERT INTO role (role_name) VALUES (?)";
-        try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            ps.setString(1, role.getRoleName());
-            ps.executeUpdate();
-
-            try (ResultSet keys = ps.getGeneratedKeys()) {
-                if (keys.next()) {
-                    int generatedId = keys.getInt(1);
-                    role.setRoleId(generatedId);
-                    return generatedId;
-                }
-                throw new SQLException("Insert succeeded but no generated key was returned for role");
-            }
-        }
+        int generatedId = JdbcExecutor.executeInsert(conn, sql, ps -> { ps.setString(1, role.getRoleName()); });
+        role.setRoleId(generatedId);
+        return generatedId;
     }
 
     public boolean update(Connection conn, Role role) throws SQLException {
         String sql = "UPDATE role SET role_name = ? WHERE role_id = ? AND deleted_at IS NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, role.getRoleName());
-            ps.setInt(2, role.getRoleId());
-            return ps.executeUpdate() > 0;
-        }
+        return JdbcExecutor.executeUpdate(conn, sql, ps -> { ps.setString(1, role.getRoleName());
+            ps.setInt(2, role.getRoleId()); }) > 0;
     }
 
     public boolean softDelete(Connection conn, Integer id) throws SQLException {
         String sql = "UPDATE role SET deleted_at = CURRENT_TIMESTAMP(6) WHERE role_id = ? AND deleted_at IS NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
+        return JdbcExecutor.executeUpdate(conn, sql, ps -> { ps.setInt(1, id); }) > 0;
     }
 
     public boolean restore(Connection conn, Integer id) throws SQLException {
         String sql = "UPDATE role SET deleted_at = NULL WHERE role_id = ? AND deleted_at IS NOT NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
+        return JdbcExecutor.executeUpdate(conn, sql, ps -> { ps.setInt(1, id); }) > 0;
     }
 
     private Role mapRow(ResultSet rs) throws SQLException {

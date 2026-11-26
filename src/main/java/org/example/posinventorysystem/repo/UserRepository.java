@@ -4,7 +4,6 @@ import org.example.posinventorysystem.data.HikariDatabaseConfig;
 import org.example.posinventorysystem.model.User;
 
 import java.sql.*;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -24,11 +23,7 @@ public class UserRepository implements GenericRepository<User, Integer> {
 
     @Override
     public List<User> findAll() {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findAll(conn);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to fetch all users", e);
-        }
+        return JdbcExecutor.withConnection("Failed to fetch all users", this::findAll);
     }
 
     @Override
@@ -53,56 +48,29 @@ public class UserRepository implements GenericRepository<User, Integer> {
 
     public Optional<User> findById(Connection conn, Integer id) throws SQLException {
         String sql = BASE_SELECT + " WHERE user_id = ? AND deleted_at IS NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, id);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
-            }
-        }
+        return JdbcExecutor.queryOne(conn, sql, ps -> { ps.setInt(1, id); }, this::mapRow);
     }
 
     public Optional<User> findByUsername(Connection conn, String username) throws SQLException {
         String sql = BASE_SELECT + " WHERE username = ? AND deleted_at IS NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, username);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
-            }
-        }
+        return JdbcExecutor.queryOne(conn, sql, ps -> { ps.setString(1, username); }, this::mapRow);
     }
 
     public List<User> findAll(Connection conn) throws SQLException {
         String sql = BASE_SELECT + " WHERE deleted_at IS NULL ORDER BY user_id";
-        List<User> users = new ArrayList<>();
-        try (Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
-            while (rs.next()) {
-                users.add(mapRow(rs));
-            }
-        }
-        return users;
+        return JdbcExecutor.query(conn, sql, ps -> { }, this::mapRow);
     }
 
     public Integer insert(Connection conn, User user) throws SQLException {
         String sql = "INSERT INTO user (full_name, username, password_hash, role_id, is_active) "
                 + "VALUES (?, ?, ?, ?, ?)";
-        try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            ps.setString(1, user.getFullName());
+        int generatedId = JdbcExecutor.executeInsert(conn, sql, ps -> { ps.setString(1, user.getFullName());
             ps.setString(2, user.getUsername());
             ps.setString(3, user.getPasswordHash());
             ps.setInt(4, user.getRoleId());
-            ps.setBoolean(5, user.isActive());
-            ps.executeUpdate();
-
-            try (ResultSet keys = ps.getGeneratedKeys()) {
-                if (keys.next()) {
-                    int generatedId = keys.getInt(1);
-                    user.setUserId(generatedId);
-                    return generatedId;
-                }
-                throw new SQLException("Insert succeeded but no generated key was returned for user");
-            }
-        }
+            ps.setBoolean(5, user.isActive()); });
+        user.setUserId(generatedId);
+        return generatedId;
     }
 
     /**
@@ -112,14 +80,11 @@ public class UserRepository implements GenericRepository<User, Integer> {
     public boolean update(Connection conn, User user) throws SQLException {
         String sql = "UPDATE user SET full_name = ?, username = ?, role_id = ?, is_active = ? "
                 + "WHERE user_id = ? AND deleted_at IS NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, user.getFullName());
+        return JdbcExecutor.executeUpdate(conn, sql, ps -> { ps.setString(1, user.getFullName());
             ps.setString(2, user.getUsername());
             ps.setInt(3, user.getRoleId());
             ps.setBoolean(4, user.isActive());
-            ps.setInt(5, user.getUserId());
-            return ps.executeUpdate() > 0;
-        }
+            ps.setInt(5, user.getUserId()); }) > 0;
     }
 
     /** Updates only the password hash for a non-deleted user. */
@@ -130,21 +95,18 @@ public class UserRepository implements GenericRepository<User, Integer> {
     /** Connection-aware overload for use inside a business-layer transaction. */
     public boolean updatePassword(Connection conn, Integer userId, String passwordHash) throws SQLException {
         String sql = "UPDATE user SET password_hash = ? WHERE user_id = ? AND deleted_at IS NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, passwordHash);
-            ps.setInt(2, userId);
-            return ps.executeUpdate() > 0;
-        }
+        return JdbcExecutor.executeUpdate(conn, sql, ps -> { ps.setString(1, passwordHash);
+            ps.setInt(2, userId); }) > 0;
     }
 
     public boolean softDelete(Connection conn, Integer id) throws SQLException {
         String sql = "UPDATE user SET deleted_at = CURRENT_TIMESTAMP(6) WHERE user_id = ? AND deleted_at IS NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
+        return JdbcExecutor.executeUpdate(conn, sql, ps -> { ps.setInt(1, id); }) > 0;
     }
 
     public boolean restore(Connection conn, Integer id) throws SQLException {
         String sql = "UPDATE user SET deleted_at = NULL WHERE user_id = ? AND deleted_at IS NOT NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
+        return JdbcExecutor.executeUpdate(conn, sql, ps -> { ps.setInt(1, id); }) > 0;
     }
 
     private User mapRow(ResultSet rs) throws SQLException {
@@ -168,11 +130,8 @@ public class UserRepository implements GenericRepository<User, Integer> {
         String sql = excludeId == null
                 ? "SELECT 1 FROM user WHERE username = ? LIMIT 1"
                 : "SELECT 1 FROM user WHERE username = ? AND user_id <> ? LIMIT 1";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, username.trim());
-            if (excludeId != null) ps.setInt(2, excludeId);
-            try (ResultSet rs = ps.executeQuery()) { return rs.next(); }
-        }
+        return JdbcExecutor.exists(conn, sql, ps -> { ps.setString(1, username.trim());
+            if (excludeId != null) ps.setInt(2, excludeId); });
     }
 
     public boolean setActive(Integer userId, boolean active) {
@@ -181,11 +140,8 @@ public class UserRepository implements GenericRepository<User, Integer> {
 
     public boolean setActive(Connection conn, Integer userId, boolean active) throws SQLException {
         String sql = "UPDATE user SET is_active = ? WHERE user_id = ? AND deleted_at IS NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setBoolean(1, active);
-            ps.setInt(2, userId);
-            return ps.executeUpdate() > 0;
-        }
+        return JdbcExecutor.executeUpdate(conn, sql, ps -> { ps.setBoolean(1, active);
+            ps.setInt(2, userId); }) > 0;
     }
 
 }

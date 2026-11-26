@@ -4,7 +4,6 @@ import org.example.posinventorysystem.data.HikariDatabaseConfig;
 import org.example.posinventorysystem.model.Sale;
 
 import java.sql.*;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,11 +20,7 @@ public class SaleRepository implements GenericRepository<Sale, Integer> {
 
     @Override
     public List<Sale> findAll() {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findAll(conn);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to fetch all sales", e);
-        }
+        return JdbcExecutor.withConnection("Failed to fetch all sales", this::findAll);
     }
 
     @Override
@@ -51,31 +46,18 @@ public class SaleRepository implements GenericRepository<Sale, Integer> {
 
     public Optional<Sale> findById(Connection conn, Integer id) throws SQLException {
         String sql = BASE_SELECT + " WHERE sale_id = ? AND deleted_at IS NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, id);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
-            }
-        }
+        return JdbcExecutor.queryOne(conn, sql, ps -> { ps.setInt(1, id); }, this::mapRow);
     }
 
     public List<Sale> findAll(Connection conn) throws SQLException {
         String sql = BASE_SELECT + " WHERE deleted_at IS NULL ORDER BY sale_id";
-        List<Sale> sales = new ArrayList<>();
-        try (Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
-            while (rs.next()) {
-                sales.add(mapRow(rs));
-            }
-        }
-        return sales;
+        return JdbcExecutor.query(conn, sql, ps -> { }, this::mapRow);
     }
 
     public Integer insert(Connection conn, Sale sale) throws SQLException {
         String sql = "INSERT INTO sale (invoice_no, sale_date, user_id, customer_id, subtotal, "
                 + "discount, tax, total, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            ps.setString(1, sale.getInvoiceNo());
+        int generatedId = JdbcExecutor.executeInsert(conn, sql, ps -> { ps.setString(1, sale.getInvoiceNo());
             ps.setTimestamp(2, Timestamp.valueOf(sale.getSaleDate()));
             ps.setInt(3, sale.getUserId());
             if (sale.getCustomerId() != null) {
@@ -87,62 +69,50 @@ public class SaleRepository implements GenericRepository<Sale, Integer> {
             ps.setBigDecimal(6, sale.getDiscount());
             ps.setBigDecimal(7, sale.getTax());
             ps.setBigDecimal(8, sale.getTotal());
-            ps.setString(9, sale.getStatus());
-            ps.executeUpdate();
-
-            try (ResultSet keys = ps.getGeneratedKeys()) {
-                if (keys.next()) {
-                    int generatedId = keys.getInt(1);
-                    sale.setSaleId(generatedId);
-                    return generatedId;
-                }
-                throw new SQLException("Insert succeeded but no generated key was returned for sale");
-            }
-        }
+            ps.setString(9, sale.getStatus()); });
+        sale.setSaleId(generatedId);
+        return generatedId;
     }
 
     public boolean update(Connection conn, Sale sale) throws SQLException {
         String sql = "UPDATE sale SET invoice_no = ?, sale_date = ?, user_id = ?, customer_id = ?, "
                 + "subtotal = ?, discount = ?, tax = ?, total = ?, status = ? WHERE sale_id = ? AND deleted_at IS NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+        return JdbcExecutor.executeUpdate(conn, sql, ps -> {
             ps.setString(1, sale.getInvoiceNo());
             ps.setTimestamp(2, Timestamp.valueOf(sale.getSaleDate()));
             ps.setInt(3, sale.getUserId());
-            if (sale.getCustomerId() != null) {
-                ps.setInt(4, sale.getCustomerId());
-            } else {
-                ps.setNull(4, Types.INTEGER);
-            }
+            if (sale.getCustomerId() != null) ps.setInt(4, sale.getCustomerId());
+            else ps.setNull(4, Types.INTEGER);
             ps.setBigDecimal(5, sale.getSubtotal());
             ps.setBigDecimal(6, sale.getDiscount());
             ps.setBigDecimal(7, sale.getTax());
             ps.setBigDecimal(8, sale.getTotal());
             ps.setString(9, sale.getStatus());
             ps.setInt(10, sale.getSaleId());
-            return ps.executeUpdate() > 0;
-        }
+        }) > 0;
     }
 
     public boolean softDelete(Connection conn, Integer id) throws SQLException {
         String sql = "UPDATE sale SET deleted_at = CURRENT_TIMESTAMP(6) WHERE sale_id = ? AND deleted_at IS NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+        if (JdbcExecutor.executeUpdate(conn, sql, ps -> ps.setInt(1, id)) == 0) return false;
+        String childSql = "UPDATE sale_item SET deleted_at = (SELECT deleted_at FROM sale WHERE sale_id = ?) "
+                + "WHERE sale_id = ? AND deleted_at IS NULL";
+        JdbcExecutor.executeUpdate(conn, childSql, ps -> {
             ps.setInt(1, id);
-            if (ps.executeUpdate() == 0) return false;
-        }
-        try (PreparedStatement child = conn.prepareStatement("UPDATE sale_item SET deleted_at = (SELECT deleted_at FROM sale WHERE sale_id = ?) WHERE sale_id = ? AND deleted_at IS NULL")) {
-            child.setInt(1, id); child.setInt(2, id); child.executeUpdate();
-        }
+            ps.setInt(2, id);
+        });
         return true;
     }
 
     public boolean restore(Connection conn, Integer id) throws SQLException {
-        try (PreparedStatement child = conn.prepareStatement(
-                "UPDATE sale_item SET deleted_at = NULL WHERE sale_id = ? "
-                        + "AND deleted_at = (SELECT deleted_at FROM sale WHERE sale_id = ? AND deleted_at IS NOT NULL)")) {
-            child.setInt(1, id); child.setInt(2, id); child.executeUpdate();
-        }
+        String childSql = "UPDATE sale_item SET deleted_at = NULL WHERE sale_id = ? "
+                + "AND deleted_at = (SELECT deleted_at FROM sale WHERE sale_id = ? AND deleted_at IS NOT NULL)";
+        JdbcExecutor.executeUpdate(conn, childSql, ps -> {
+            ps.setInt(1, id);
+            ps.setInt(2, id);
+        });
         String sql = "UPDATE sale SET deleted_at = NULL WHERE sale_id = ? AND deleted_at IS NOT NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
+        return JdbcExecutor.executeUpdate(conn, sql, ps -> { ps.setInt(1, id); }) > 0;
     }
 
     private Sale mapRow(ResultSet rs) throws SQLException {
@@ -172,15 +142,10 @@ public class SaleRepository implements GenericRepository<Sale, Integer> {
             throw new IllegalArgumentException("Date range must have non-null endpoints and from <= to");
         String sql = BASE_SELECT + " WHERE deleted_at IS NULL AND sale_date >= ? AND sale_date <= ? "
                 + "ORDER BY sale_date, sale_id";
-        List<Sale> sales = new ArrayList<>();
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+        return JdbcExecutor.query(conn, sql, ps -> {
             ps.setObject(1, from);
             ps.setObject(2, to);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) sales.add(mapRow(rs));
-            }
-        }
-        return sales;
+        }, this::mapRow);
     }
 
     public Optional<Sale> findByInvoiceNo(String invoiceNo) {
@@ -189,28 +154,17 @@ public class SaleRepository implements GenericRepository<Sale, Integer> {
 
     public Optional<Sale> findByInvoiceNo(Connection conn, String invoiceNo) throws SQLException {
         String sql = BASE_SELECT + " WHERE invoice_no = ? AND deleted_at IS NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, invoiceNo);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
-            }
-        }
+        return JdbcExecutor.queryOne(conn, sql, ps -> { ps.setString(1, invoiceNo); }, this::mapRow);
     }
 
     /** Returns the invoice number of the newest non-deleted sale, or empty when none exists. */
     public Optional<String> findLastInvoiceNo() {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findLastInvoiceNo(conn);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to find last invoice number", e);
-        }
+        return JdbcExecutor.withConnection("Failed to find last invoice number", this::findLastInvoiceNo);
     }
 
     public Optional<String> findLastInvoiceNo(Connection conn) throws SQLException {
         String sql = "SELECT invoice_no FROM sale WHERE deleted_at IS NULL ORDER BY sale_id DESC LIMIT 1";
-        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
-            return rs.next() ? Optional.of(rs.getString("invoice_no")) : Optional.empty();
-        }
+        return JdbcExecutor.queryOne(conn, sql, ps -> { }, rs -> rs.getString("invoice_no"));
     }
 
 }

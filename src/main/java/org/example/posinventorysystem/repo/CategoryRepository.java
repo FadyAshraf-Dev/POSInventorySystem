@@ -4,7 +4,6 @@ import org.example.posinventorysystem.data.HikariDatabaseConfig;
 import org.example.posinventorysystem.model.Category;
 
 import java.sql.*;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -17,11 +16,7 @@ public class CategoryRepository implements GenericRepository<Category, Integer> 
 
     @Override
     public List<Category> findAll() {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findAll(conn);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to fetch all categories", e);
-        }
+        return JdbcExecutor.withConnection("Failed to fetch all categories", this::findAll);
     }
 
     @Override
@@ -46,60 +41,35 @@ public class CategoryRepository implements GenericRepository<Category, Integer> 
 
     public Optional<Category> findById(Connection conn, Integer id) throws SQLException {
         String sql = "SELECT category_id, category_name FROM category WHERE deleted_at IS NULL AND category_id = ?";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, id);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
-            }
-        }
+        return JdbcExecutor.queryOne(conn, sql, ps -> { ps.setInt(1, id); }, this::mapRow);
     }
 
     public List<Category> findAll(Connection conn) throws SQLException {
         String sql = "SELECT category_id, category_name FROM category WHERE deleted_at IS NULL ORDER BY category_id";
-        List<Category> categories = new ArrayList<>();
-        try (Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
-            while (rs.next()) {
-                categories.add(mapRow(rs));
-            }
-        }
-        return categories;
+        return JdbcExecutor.query(conn, sql, ps -> { }, this::mapRow);
     }
 
     public Integer insert(Connection conn, Category category) throws SQLException {
         String sql = "INSERT INTO category (category_name) VALUES (?)";
-        try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            ps.setString(1, category.getCategoryName());
-            ps.executeUpdate();
-
-            try (ResultSet keys = ps.getGeneratedKeys()) {
-                if (keys.next()) {
-                    int generatedId = keys.getInt(1);
-                    category.setCategoryId(generatedId);
-                    return generatedId;
-                }
-                throw new SQLException("Insert succeeded but no generated key was returned for category");
-            }
-        }
+        int generatedId = JdbcExecutor.executeInsert(conn, sql, ps -> { ps.setString(1, category.getCategoryName()); });
+        category.setCategoryId(generatedId);
+        return generatedId;
     }
 
     public boolean update(Connection conn, Category category) throws SQLException {
         String sql = "UPDATE category SET category_name = ? WHERE category_id = ? AND deleted_at IS NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, category.getCategoryName());
-            ps.setInt(2, category.getCategoryId());
-            return ps.executeUpdate() > 0;
-        }
+        return JdbcExecutor.executeUpdate(conn, sql, ps -> { ps.setString(1, category.getCategoryName());
+            ps.setInt(2, category.getCategoryId()); }) > 0;
     }
 
     public boolean softDelete(Connection conn, Integer id) throws SQLException {
         String sql = "UPDATE category SET deleted_at = CURRENT_TIMESTAMP(6) WHERE category_id = ? AND deleted_at IS NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
+        return JdbcExecutor.executeUpdate(conn, sql, ps -> { ps.setInt(1, id); }) > 0;
     }
 
     public boolean restore(Connection conn, Integer id) throws SQLException {
         String sql = "UPDATE category SET deleted_at = NULL WHERE category_id = ? AND deleted_at IS NOT NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) { ps.setInt(1, id); return ps.executeUpdate() > 0; }
+        return JdbcExecutor.executeUpdate(conn, sql, ps -> { ps.setInt(1, id); }) > 0;
     }
 
     private Category mapRow(ResultSet rs) throws SQLException {
@@ -118,14 +88,7 @@ public class CategoryRepository implements GenericRepository<Category, Integer> 
         if (term == null || term.isBlank()) return List.of();
         String sql = "SELECT category_id, category_name FROM category WHERE deleted_at IS NULL AND LOWER(category_name) LIKE ? ORDER BY category_name, category_id";
         String pattern = "%" + term.trim().toLowerCase() + "%";
-        List<Category> rows = new ArrayList<>();
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            for (int i = 1; i <= 1; i++) ps.setString(i, pattern);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) rows.add(mapRow(rs));
-            }
-        }
-        return rows;
+        return JdbcExecutor.query(conn, sql, ps -> ps.setString(1, pattern), this::mapRow);
     }
 
     /** Returns true if any product record references this category, including historical/soft-deleted records. */
@@ -135,10 +98,7 @@ public class CategoryRepository implements GenericRepository<Category, Integer> 
 
     public boolean hasProducts(Connection conn, Integer id) throws SQLException {
         String sql = "SELECT 1 FROM product WHERE category_id = ? LIMIT 1";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, id);
-            try (ResultSet rs = ps.executeQuery()) { return rs.next(); }
-        }
+        return JdbcExecutor.exists(conn, sql, ps -> { ps.setInt(1, id); });
     }
 
 }

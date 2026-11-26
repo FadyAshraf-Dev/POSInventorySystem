@@ -4,7 +4,6 @@ import org.example.posinventorysystem.data.HikariDatabaseConfig;
 import org.example.posinventorysystem.model.Movement;
 
 import java.sql.*;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,11 +24,7 @@ public class MovementRepository implements InsertOnlyRepository<Movement, Intege
 
     @Override
     public List<Movement> findAll() {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findAll(conn);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to fetch all movements", e);
-        }
+        return JdbcExecutor.withConnection("Failed to fetch all movements", this::findAll);
     }
 
     @Override
@@ -39,45 +34,23 @@ public class MovementRepository implements InsertOnlyRepository<Movement, Intege
 
     public Optional<Movement> findById(Connection conn, Integer id) throws SQLException {
         String sql = BASE_SELECT + " WHERE movement_id = ?";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, id);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
-            }
-        }
+        return JdbcExecutor.queryOne(conn, sql, ps -> { ps.setInt(1, id); }, this::mapRow);
     }
 
     public List<Movement> findByProductId(Connection conn, Integer productId) throws SQLException {
         String sql = BASE_SELECT + " WHERE product_id = ? ORDER BY movement_date, movement_id";
-        List<Movement> movements = new ArrayList<>();
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, productId);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    movements.add(mapRow(rs));
-                }
-            }
-        }
-        return movements;
+        return JdbcExecutor.query(conn, sql, ps -> { ps.setInt(1, productId); }, this::mapRow);
     }
 
     public List<Movement> findAll(Connection conn) throws SQLException {
         String sql = BASE_SELECT + " ORDER BY movement_id";
-        List<Movement> movements = new ArrayList<>();
-        try (Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
-            while (rs.next()) {
-                movements.add(mapRow(rs));
-            }
-        }
-        return movements;
+        return JdbcExecutor.query(conn, sql, ps -> { }, this::mapRow);
     }
 
     public Integer insert(Connection conn, Movement movement) throws SQLException {
         String sql = "INSERT INTO movement (product_id, movement_type, quantity_change, reference_id, reason, user_id, movement_date) "
                 + "VALUES (?, ?, ?, ?, ?, ?, ?)";
-        try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            ps.setInt(1, movement.getProductId());
+        int generatedId = JdbcExecutor.executeInsert(conn, sql, ps -> { ps.setInt(1, movement.getProductId());
             ps.setString(2, movement.getMovementType());
             ps.setInt(3, movement.getQuantityChange());
             if (movement.getReferenceId() != null) {
@@ -87,18 +60,9 @@ public class MovementRepository implements InsertOnlyRepository<Movement, Intege
             }
             ps.setString(5, movement.getReason());
             ps.setInt(6, movement.getUserId());
-            ps.setTimestamp(7, Timestamp.valueOf(movement.getMovementDate()));
-            ps.executeUpdate();
-
-            try (ResultSet keys = ps.getGeneratedKeys()) {
-                if (keys.next()) {
-                    int generatedId = keys.getInt(1);
-                    movement.setMovementId(generatedId);
-                    return generatedId;
-                }
-                throw new SQLException("Insert succeeded but no generated key was returned for movement");
-            }
-        }
+            ps.setTimestamp(7, Timestamp.valueOf(movement.getMovementDate())); });
+        movement.setMovementId(generatedId);
+        return generatedId;
     }
 
 
@@ -127,15 +91,10 @@ public class MovementRepository implements InsertOnlyRepository<Movement, Intege
         if (from == null || to == null || from.isAfter(to))
             throw new IllegalArgumentException("Date range must have non-null endpoints and from <= to");
         String sql = BASE_SELECT + " WHERE movement_date >= ? AND movement_date <= ? ORDER BY movement_date, movement_id";
-        List<Movement> movements = new ArrayList<>();
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+        return JdbcExecutor.query(conn, sql, ps -> {
             ps.setObject(1, from);
             ps.setObject(2, to);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) movements.add(mapRow(rs));
-            }
-        }
-        return movements;
+        }, this::mapRow);
     }
 
 }
