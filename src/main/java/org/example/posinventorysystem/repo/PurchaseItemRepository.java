@@ -16,19 +16,11 @@ public class PurchaseItemRepository implements GenericRepository<PurchaseItem, I
 
     @Override
     public Optional<PurchaseItem> findById(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findById(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to find purchase item by id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to find purchase item by id: " + id, conn -> findById(conn, id));
     }
 
     public List<PurchaseItem> findByPurchaseId(Integer purchaseId) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findByPurchaseId(conn, purchaseId);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to find purchase items for purchase_id: " + purchaseId, e);
-        }
+        return JdbcExecutor.withConnection("Failed to find purchase items for purchase_id: " + purchaseId, conn -> findByPurchaseId(conn, purchaseId));
     }
 
     @Override
@@ -42,39 +34,23 @@ public class PurchaseItemRepository implements GenericRepository<PurchaseItem, I
 
     @Override
     public Integer insert(PurchaseItem item) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return insert(conn, item);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to insert purchase item: " + item, e);
-        }
+        return JdbcExecutor.withConnection("Failed to insert purchase item: " + item, conn -> insert(conn, item));
     }
 
     @Override
     public boolean update(PurchaseItem item) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return update(conn, item);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to update purchase item: " + item, e);
-        }
+        return JdbcExecutor.withConnection("Failed to update purchase item: " + item, conn -> update(conn, item));
     }
 
     
     @Override
     public boolean softDelete(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return softDelete(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to soft-delete purchaseitem with id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to soft-delete purchaseitem with id: " + id, conn -> softDelete(conn, id));
     }
 
     @Override
     public boolean restore(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return restore(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to restore purchaseitem with id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to restore purchaseitem with id: " + id, conn -> restore(conn, id));
     }
 
     public Optional<PurchaseItem> findById(Connection conn, Integer id) throws SQLException {

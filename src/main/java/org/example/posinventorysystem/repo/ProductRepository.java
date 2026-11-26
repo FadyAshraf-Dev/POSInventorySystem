@@ -16,11 +16,7 @@ public class ProductRepository implements GenericRepository<Product, Integer> {
 
     @Override
     public Optional<Product> findById(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findById(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to find product by id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to find product by id: " + id, conn -> findById(conn, id));
     }
 
     public List<Product> findActive() {
@@ -41,11 +37,7 @@ public class ProductRepository implements GenericRepository<Product, Integer> {
     }
 
     public boolean setActive(int productId, boolean active) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return setActive(conn, productId, active);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to change active state for product " + productId, e);
-        }
+        return JdbcExecutor.withConnection("Failed to change active state for product " + productId, conn -> setActive(conn, productId, active));
     }
 
     public boolean setActive(Connection conn, int productId, boolean active) throws SQLException {
@@ -58,11 +50,7 @@ public class ProductRepository implements GenericRepository<Product, Integer> {
     }
 
     public Optional<Product> findByBarcode(String barcode) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findByBarcode(conn, barcode);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to find product by barcode: " + barcode, e);
-        }
+        return JdbcExecutor.withConnection("Failed to find product by barcode: " + barcode, conn -> findByBarcode(conn, barcode));
     }
 
     @Override
@@ -76,38 +64,22 @@ public class ProductRepository implements GenericRepository<Product, Integer> {
 
     @Override
     public Integer insert(Product product) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return insert(conn, product);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to insert product: " + product, e);
-        }
+        return JdbcExecutor.withConnection("Failed to insert product: " + product, conn -> insert(conn, product));
     }
 
     @Override
     public boolean update(Product product) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return update(conn, product);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to update product: " + product, e);
-        }
+        return JdbcExecutor.withConnection("Failed to update product: " + product, conn -> update(conn, product));
     }
 
     @Override
     public boolean softDelete(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return softDelete(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to soft-delete product with id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to soft-delete product with id: " + id, conn -> softDelete(conn, id));
     }
 
     @Override
     public boolean restore(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return restore(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to restore product with id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to restore product with id: " + id, conn -> restore(conn, id));
     }
 
     /**
@@ -127,12 +99,7 @@ public class ProductRepository implements GenericRepository<Product, Integer> {
      * related rows commit or roll back together.
      */
     public boolean adjustStock(int productId, int delta) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return adjustStock(conn, productId, delta);
-        } catch (SQLException e) {
-            throw new RepositoryException(
-                    "Failed to adjust stock for product id: " + productId + " by delta: " + delta, e);
-        }
+        return JdbcExecutor.withConnection("Failed to adjust stock for product id: " + productId + " by delta: " + delta, conn -> adjustStock(conn, productId, delta));
     }
 
     public boolean adjustStock(Connection conn, int productId, int delta) throws SQLException {
@@ -260,11 +227,7 @@ public class ProductRepository implements GenericRepository<Product, Integer> {
 
     /** Searches non-deleted products by name or barcode, including inactive products for inventory-management use. */
     public List<Product> search(String term) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return search(conn, term);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to search products", e);
-        }
+        return JdbcExecutor.withConnection("Failed to search products", conn -> search(conn, term));
     }
 
     public List<Product> search(Connection conn, String term) throws SQLException {
@@ -305,11 +268,7 @@ public class ProductRepository implements GenericRepository<Product, Integer> {
 
     /** Checks barcode uniqueness across all rows (including soft-deleted rows), matching the global UNIQUE constraint. */
     public boolean barcodeExists(String barcode, Integer excludeId) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return barcodeExists(conn, barcode, excludeId);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to check product barcode", e);
-        }
+        return JdbcExecutor.withConnection("Failed to check product barcode", conn -> barcodeExists(conn, barcode, excludeId));
     }
 
     public boolean barcodeExists(Connection conn, String barcode, Integer excludeId) throws SQLException {

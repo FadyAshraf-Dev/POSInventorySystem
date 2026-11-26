@@ -16,11 +16,7 @@ public class SaleRepository implements GenericRepository<Sale, Integer> {
 
     @Override
     public Optional<Sale> findById(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findById(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to find sale by id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to find sale by id: " + id, conn -> findById(conn, id));
     }
 
     @Override
@@ -34,31 +30,23 @@ public class SaleRepository implements GenericRepository<Sale, Integer> {
 
     @Override
     public Integer insert(Sale sale) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return insert(conn, sale);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to insert sale: " + sale, e);
-        }
+        return JdbcExecutor.withConnection("Failed to insert sale: " + sale, conn -> insert(conn, sale));
     }
 
     @Override
     public boolean update(Sale sale) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return update(conn, sale);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to update sale: " + sale, e);
-        }
+        return JdbcExecutor.withConnection("Failed to update sale: " + sale, conn -> update(conn, sale));
     }
 
     
     @Override
     public boolean softDelete(Integer id) {
-        return org.example.posinventorysystem.data.TransactionManager.run(conn -> softDelete(conn, id));
+        return TransactionManager.run(conn -> softDelete(conn, id));
     }
 
     @Override
     public boolean restore(Integer id) {
-        return org.example.posinventorysystem.data.TransactionManager.run(conn -> restore(conn, id));
+        return TransactionManager.run(conn -> restore(conn, id));
     }
 
     public Optional<Sale> findById(Connection conn, Integer id) throws SQLException {
@@ -175,11 +163,7 @@ public class SaleRepository implements GenericRepository<Sale, Integer> {
 
     /** Finds non-deleted sales in the inclusive date/time range. */
     public List<Sale> findByDateRange(java.time.LocalDateTime from, java.time.LocalDateTime to) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findByDateRange(conn, from, to);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to fetch sales for date range", e);
-        }
+        return JdbcExecutor.withConnection("Failed to fetch sales for date range", conn -> findByDateRange(conn, from, to));
     }
 
     public List<Sale> findByDateRange(Connection conn, java.time.LocalDateTime from,
@@ -200,11 +184,7 @@ public class SaleRepository implements GenericRepository<Sale, Integer> {
     }
 
     public Optional<Sale> findByInvoiceNo(String invoiceNo) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findByInvoiceNo(conn, invoiceNo);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to find sale by invoice number: " + invoiceNo, e);
-        }
+        return JdbcExecutor.withConnection("Failed to find sale by invoice number: " + invoiceNo, conn -> findByInvoiceNo(conn, invoiceNo));
     }
 
     public Optional<Sale> findByInvoiceNo(Connection conn, String invoiceNo) throws SQLException {

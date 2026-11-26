@@ -12,11 +12,7 @@ public class UnitRepository implements GenericRepository<Unit, Integer> {
 
     @Override
     public Optional<Unit> findById(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findById(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to find unit by id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to find unit by id: " + id, conn -> findById(conn, id));
     }
 
     @Override
@@ -30,38 +26,22 @@ public class UnitRepository implements GenericRepository<Unit, Integer> {
 
     @Override
     public Integer insert(Unit unit) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return insert(conn, unit);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to insert unit: " + unit, e);
-        }
+        return JdbcExecutor.withConnection("Failed to insert unit: " + unit, conn -> insert(conn, unit));
     }
 
     @Override
     public boolean update(Unit unit) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return update(conn, unit);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to update unit: " + unit, e);
-        }
+        return JdbcExecutor.withConnection("Failed to update unit: " + unit, conn -> update(conn, unit));
     }
 
     @Override
     public boolean softDelete(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return softDelete(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to soft-delete unit with id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to soft-delete unit with id: " + id, conn -> softDelete(conn, id));
     }
 
     @Override
     public boolean restore(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return restore(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to restore unit with id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to restore unit with id: " + id, conn -> restore(conn, id));
     }
 
     public Optional<Unit> findById(Connection conn, Integer id) throws SQLException {

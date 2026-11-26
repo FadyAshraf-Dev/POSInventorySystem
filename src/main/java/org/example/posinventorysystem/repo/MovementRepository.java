@@ -16,19 +16,11 @@ public class MovementRepository implements InsertOnlyRepository<Movement, Intege
 
     @Override
     public Optional<Movement> findById(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findById(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to find movement by id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to find movement by id: " + id, conn -> findById(conn, id));
     }
 
     public List<Movement> findByProductId(Integer productId) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findByProductId(conn, productId);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to find movements for product_id: " + productId, e);
-        }
+        return JdbcExecutor.withConnection("Failed to find movements for product_id: " + productId, conn -> findByProductId(conn, productId));
     }
 
     @Override
@@ -42,11 +34,7 @@ public class MovementRepository implements InsertOnlyRepository<Movement, Intege
 
     @Override
     public Integer insert(Movement movement) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return insert(conn, movement);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to insert movement: " + movement, e);
-        }
+        return JdbcExecutor.withConnection("Failed to insert movement: " + movement, conn -> insert(conn, movement));
     }
 
     public Optional<Movement> findById(Connection conn, Integer id) throws SQLException {
@@ -131,11 +119,7 @@ public class MovementRepository implements InsertOnlyRepository<Movement, Intege
 
     /** Returns ledger movements within the inclusive date/time range. */
     public List<Movement> findByDateRange(java.time.LocalDateTime from, java.time.LocalDateTime to) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findByDateRange(conn, from, to);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to fetch movements for date range", e);
-        }
+        return JdbcExecutor.withConnection("Failed to fetch movements for date range", conn -> findByDateRange(conn, from, to));
     }
 
     public List<Movement> findByDateRange(Connection conn, java.time.LocalDateTime from,

@@ -12,11 +12,7 @@ public class CategoryRepository implements GenericRepository<Category, Integer> 
 
     @Override
     public Optional<Category> findById(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findById(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to find category by id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to find category by id: " + id, conn -> findById(conn, id));
     }
 
     @Override
@@ -30,38 +26,22 @@ public class CategoryRepository implements GenericRepository<Category, Integer> 
 
     @Override
     public Integer insert(Category category) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return insert(conn, category);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to insert category: " + category, e);
-        }
+        return JdbcExecutor.withConnection("Failed to insert category: " + category, conn -> insert(conn, category));
     }
 
     @Override
     public boolean update(Category category) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return update(conn, category);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to update category: " + category, e);
-        }
+        return JdbcExecutor.withConnection("Failed to update category: " + category, conn -> update(conn, category));
     }
 
     @Override
     public boolean softDelete(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return softDelete(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to soft-delete category with id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to soft-delete category with id: " + id, conn -> softDelete(conn, id));
     }
 
     @Override
     public boolean restore(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return restore(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to restore category with id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to restore category with id: " + id, conn -> restore(conn, id));
     }
 
     public Optional<Category> findById(Connection conn, Integer id) throws SQLException {
@@ -131,11 +111,7 @@ public class CategoryRepository implements GenericRepository<Category, Integer> 
 
     /** Case-insensitive search across category_name for non-deleted records. */
     public List<Category> search(String term) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return search(conn, term);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to search categories", e);
-        }
+        return JdbcExecutor.withConnection("Failed to search categories", conn -> search(conn, term));
     }
 
     public List<Category> search(Connection conn, String term) throws SQLException {
@@ -154,11 +130,7 @@ public class CategoryRepository implements GenericRepository<Category, Integer> 
 
     /** Returns true if any product record references this category, including historical/soft-deleted records. */
     public boolean hasProducts(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return hasProducts(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to check references for category id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to check references for category id: " + id, conn -> hasProducts(conn, id));
     }
 
     public boolean hasProducts(Connection conn, Integer id) throws SQLException {

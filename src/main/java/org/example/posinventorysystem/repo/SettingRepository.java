@@ -12,11 +12,7 @@ public class SettingRepository implements UpdatableRepository<Setting, Integer> 
 
     @Override
     public Optional<Setting> findById(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findById(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to find setting by id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to find setting by id: " + id, conn -> findById(conn, id));
     }
 
     @Override
@@ -30,20 +26,12 @@ public class SettingRepository implements UpdatableRepository<Setting, Integer> 
 
     @Override
     public Integer insert(Setting setting) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return insert(conn, setting);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to insert setting: " + setting, e);
-        }
+        return JdbcExecutor.withConnection("Failed to insert setting: " + setting, conn -> insert(conn, setting));
     }
 
     @Override
     public boolean update(Setting setting) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return update(conn, setting);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to update setting: " + setting, e);
-        }
+        return JdbcExecutor.withConnection("Failed to update setting: " + setting, conn -> update(conn, setting));
     }
 
     public Optional<Setting> findById(Connection conn, Integer id) throws SQLException {

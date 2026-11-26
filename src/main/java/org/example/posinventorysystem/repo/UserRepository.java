@@ -15,19 +15,11 @@ public class UserRepository implements GenericRepository<User, Integer> {
 
     @Override
     public Optional<User> findById(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findById(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to find user by id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to find user by id: " + id, conn -> findById(conn, id));
     }
 
     public Optional<User> findByUsername(String username) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findByUsername(conn, username);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to find user by username: " + username, e);
-        }
+        return JdbcExecutor.withConnection("Failed to find user by username: " + username, conn -> findByUsername(conn, username));
     }
 
     @Override
@@ -41,38 +33,22 @@ public class UserRepository implements GenericRepository<User, Integer> {
 
     @Override
     public Integer insert(User user) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return insert(conn, user);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to insert user: " + user, e);
-        }
+        return JdbcExecutor.withConnection("Failed to insert user: " + user, conn -> insert(conn, user));
     }
 
     @Override
     public boolean update(User user) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return update(conn, user);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to update user: " + user, e);
-        }
+        return JdbcExecutor.withConnection("Failed to update user: " + user, conn -> update(conn, user));
     }
 
     @Override
     public boolean softDelete(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return softDelete(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to soft-delete user with id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to soft-delete user with id: " + id, conn -> softDelete(conn, id));
     }
 
     @Override
     public boolean restore(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return restore(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to restore user with id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to restore user with id: " + id, conn -> restore(conn, id));
     }
 
     public Optional<User> findById(Connection conn, Integer id) throws SQLException {
@@ -148,11 +124,7 @@ public class UserRepository implements GenericRepository<User, Integer> {
 
     /** Updates only the password hash for a non-deleted user. */
     public boolean updatePassword(Integer userId, String passwordHash) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return updatePassword(conn, userId, passwordHash);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to update password for user id: " + userId, e);
-        }
+        return JdbcExecutor.withConnection("Failed to update password for user id: " + userId, conn -> updatePassword(conn, userId, passwordHash));
     }
 
     /** Connection-aware overload for use inside a business-layer transaction. */
@@ -188,11 +160,7 @@ public class UserRepository implements GenericRepository<User, Integer> {
 
     /** Checks username uniqueness across all records, including soft-deleted rows, to match the UNIQUE constraint. */
     public boolean usernameExists(String username, Integer excludeId) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return usernameExists(conn, username, excludeId);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to check username uniqueness", e);
-        }
+        return JdbcExecutor.withConnection("Failed to check username uniqueness", conn -> usernameExists(conn, username, excludeId));
     }
 
     public boolean usernameExists(Connection conn, String username, Integer excludeId) throws SQLException {
@@ -208,11 +176,7 @@ public class UserRepository implements GenericRepository<User, Integer> {
     }
 
     public boolean setActive(Integer userId, boolean active) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return setActive(conn, userId, active);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to change active state for user id: " + userId, e);
-        }
+        return JdbcExecutor.withConnection("Failed to change active state for user id: " + userId, conn -> setActive(conn, userId, active));
     }
 
     public boolean setActive(Connection conn, Integer userId, boolean active) throws SQLException {

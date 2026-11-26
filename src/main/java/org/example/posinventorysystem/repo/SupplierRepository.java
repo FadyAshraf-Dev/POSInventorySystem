@@ -12,11 +12,7 @@ public class SupplierRepository implements GenericRepository<Supplier, Integer> 
 
     @Override
     public Optional<Supplier> findById(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findById(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to find supplier by id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to find supplier by id: " + id, conn -> findById(conn, id));
     }
 
     @Override
@@ -30,38 +26,22 @@ public class SupplierRepository implements GenericRepository<Supplier, Integer> 
 
     @Override
     public Integer insert(Supplier supplier) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return insert(conn, supplier);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to insert supplier: " + supplier, e);
-        }
+        return JdbcExecutor.withConnection("Failed to insert supplier: " + supplier, conn -> insert(conn, supplier));
     }
 
     @Override
     public boolean update(Supplier supplier) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return update(conn, supplier);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to update supplier: " + supplier, e);
-        }
+        return JdbcExecutor.withConnection("Failed to update supplier: " + supplier, conn -> update(conn, supplier));
     }
 
     @Override
     public boolean softDelete(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return softDelete(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to soft-delete supplier with id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to soft-delete supplier with id: " + id, conn -> softDelete(conn, id));
     }
 
     @Override
     public boolean restore(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return restore(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to restore supplier with id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to restore supplier with id: " + id, conn -> restore(conn, id));
     }
 
     public Optional<Supplier> findById(Connection conn, Integer id) throws SQLException {
@@ -137,11 +117,7 @@ public class SupplierRepository implements GenericRepository<Supplier, Integer> 
 
     /** Case-insensitive search across supplier name and phone for non-deleted records. */
     public List<Supplier> search(String term) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return search(conn, term);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to search suppliers", e);
-        }
+        return JdbcExecutor.withConnection("Failed to search suppliers", conn -> search(conn, term));
     }
 
     public List<Supplier> search(Connection conn, String term) throws SQLException {
@@ -160,11 +136,7 @@ public class SupplierRepository implements GenericRepository<Supplier, Integer> 
 
     /** Returns true if any purchase record references this supplier, including historical/soft-deleted records. */
     public boolean hasPurchases(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return hasPurchases(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to check references for supplier id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to check references for supplier id: " + id, conn -> hasPurchases(conn, id));
     }
 
     public boolean hasPurchases(Connection conn, Integer id) throws SQLException {

@@ -15,19 +15,11 @@ public class PaymentRepository implements InsertOnlyRepository<Payment, Integer>
 
     @Override
     public Optional<Payment> findById(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findById(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to find payment by id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to find payment by id: " + id, conn -> findById(conn, id));
     }
 
     public List<Payment> findBySaleId(Integer saleId) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findBySaleId(conn, saleId);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to find payments for sale_id: " + saleId, e);
-        }
+        return JdbcExecutor.withConnection("Failed to find payments for sale_id: " + saleId, conn -> findBySaleId(conn, saleId));
     }
 
     @Override
@@ -41,11 +33,7 @@ public class PaymentRepository implements InsertOnlyRepository<Payment, Integer>
 
     @Override
     public Integer insert(Payment payment) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return insert(conn, payment);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to insert payment: " + payment, e);
-        }
+        return JdbcExecutor.withConnection("Failed to insert payment: " + payment, conn -> insert(conn, payment));
     }
 
     public Optional<Payment> findById(Connection conn, Integer id) throws SQLException {

@@ -12,11 +12,7 @@ public class CustomerRepository implements GenericRepository<Customer, Integer> 
 
     @Override
     public Optional<Customer> findById(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findById(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to find customer by id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to find customer by id: " + id, conn -> findById(conn, id));
     }
 
     @Override
@@ -30,38 +26,22 @@ public class CustomerRepository implements GenericRepository<Customer, Integer> 
 
     @Override
     public Integer insert(Customer customer) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return insert(conn, customer);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to insert customer: " + customer, e);
-        }
+        return JdbcExecutor.withConnection("Failed to insert customer: " + customer, conn -> insert(conn, customer));
     }
 
     @Override
     public boolean update(Customer customer) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return update(conn, customer);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to update customer: " + customer, e);
-        }
+        return JdbcExecutor.withConnection("Failed to update customer: " + customer, conn -> update(conn, customer));
     }
 
     @Override
     public boolean softDelete(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return softDelete(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to soft-delete customer with id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to soft-delete customer with id: " + id, conn -> softDelete(conn, id));
     }
 
     @Override
     public boolean restore(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return restore(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to restore customer with id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to restore customer with id: " + id, conn -> restore(conn, id));
     }
 
     public Optional<Customer> findById(Connection conn, Integer id) throws SQLException {
@@ -137,11 +117,7 @@ public class CustomerRepository implements GenericRepository<Customer, Integer> 
 
     /** Case-insensitive search across customer name and phone for non-deleted records. */
     public List<Customer> search(String term) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return search(conn, term);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to search customers", e);
-        }
+        return JdbcExecutor.withConnection("Failed to search customers", conn -> search(conn, term));
     }
 
     public List<Customer> search(Connection conn, String term) throws SQLException {
@@ -160,11 +136,7 @@ public class CustomerRepository implements GenericRepository<Customer, Integer> 
 
     /** Returns true if any sale record references this customer, including historical/soft-deleted records. */
     public boolean hasSales(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return hasSales(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to check references for customer id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to check references for customer id: " + id, conn -> hasSales(conn, id));
     }
 
     public boolean hasSales(Connection conn, Integer id) throws SQLException {

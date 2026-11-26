@@ -19,11 +19,7 @@ public class RoleRepository implements GenericRepository<Role, Integer> {
 
     @Override
     public Optional<Role> findById(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findById(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to find role by id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to find role by id: " + id, conn -> findById(conn, id));
     }
 
     @Override
@@ -37,38 +33,22 @@ public class RoleRepository implements GenericRepository<Role, Integer> {
 
     @Override
     public Integer insert(Role role) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return insert(conn, role);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to insert role: " + role, e);
-        }
+        return JdbcExecutor.withConnection("Failed to insert role: " + role, conn -> insert(conn, role));
     }
 
     @Override
     public boolean update(Role role) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return update(conn, role);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to update role: " + role, e);
-        }
+        return JdbcExecutor.withConnection("Failed to update role: " + role, conn -> update(conn, role));
     }
 
     @Override
     public boolean softDelete(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return softDelete(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to soft-delete role with id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to soft-delete role with id: " + id, conn -> softDelete(conn, id));
     }
 
     @Override
     public boolean restore(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return restore(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to restore role with id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to restore role with id: " + id, conn -> restore(conn, id));
     }
 
     // ------------------------------------------------------------

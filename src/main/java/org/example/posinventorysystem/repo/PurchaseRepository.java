@@ -15,11 +15,7 @@ public class PurchaseRepository implements GenericRepository<Purchase, Integer> 
 
     @Override
     public Optional<Purchase> findById(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findById(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to find purchase by id: " + id, e);
-        }
+        return JdbcExecutor.withConnection("Failed to find purchase by id: " + id, conn -> findById(conn, id));
     }
 
     @Override
@@ -33,20 +29,12 @@ public class PurchaseRepository implements GenericRepository<Purchase, Integer> 
 
     @Override
     public Integer insert(Purchase purchase) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return insert(conn, purchase);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to insert purchase: " + purchase, e);
-        }
+        return JdbcExecutor.withConnection("Failed to insert purchase: " + purchase, conn -> insert(conn, purchase));
     }
 
     @Override
     public boolean update(Purchase purchase) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return update(conn, purchase);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to update purchase: " + purchase, e);
-        }
+        return JdbcExecutor.withConnection("Failed to update purchase: " + purchase, conn -> update(conn, purchase));
     }
 
     
