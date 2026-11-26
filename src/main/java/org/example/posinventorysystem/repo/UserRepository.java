@@ -130,22 +130,37 @@ public class UserRepository implements GenericRepository<User, Integer> {
     }
 
     /**
-     * NOTE (review item 9): this full update() still rewrites password_hash every
-     * call. A User object loaded without the hash populated would wipe it.
-     * A dedicated updatePassword(conn, userId, hash) should be added separately
-     * and this update() should stop touching password_hash — left as-is here
-     * since that's a distinct review item; flagging so it isn't forgotten.
+     * Updates a user's profile and role without touching their password hash.
+     * Password changes must go through updatePassword() explicitly.
      */
     public boolean update(Connection conn, User user) throws SQLException {
-        String sql = "UPDATE user SET full_name = ?, username = ?, password_hash = ?, "
-                + "role_id = ?, is_active = ? WHERE user_id = ? AND deleted_at IS NULL";
+        String sql = "UPDATE user SET full_name = ?, username = ?, role_id = ?, is_active = ? "
+                + "WHERE user_id = ? AND deleted_at IS NULL";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, user.getFullName());
             ps.setString(2, user.getUsername());
-            ps.setString(3, user.getPasswordHash());
-            ps.setInt(4, user.getRoleId());
-            ps.setBoolean(5, user.isActive());
-            ps.setInt(6, user.getUserId());
+            ps.setInt(3, user.getRoleId());
+            ps.setBoolean(4, user.isActive());
+            ps.setInt(5, user.getUserId());
+            return ps.executeUpdate() > 0;
+        }
+    }
+
+    /** Updates only the password hash for a non-deleted user. */
+    public boolean updatePassword(Integer userId, String passwordHash) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return updatePassword(conn, userId, passwordHash);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to update password for user id: " + userId, e);
+        }
+    }
+
+    /** Connection-aware overload for use inside a business-layer transaction. */
+    public boolean updatePassword(Connection conn, Integer userId, String passwordHash) throws SQLException {
+        String sql = "UPDATE user SET password_hash = ? WHERE user_id = ? AND deleted_at IS NULL";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, passwordHash);
+            ps.setInt(2, userId);
             return ps.executeUpdate() > 0;
         }
     }
