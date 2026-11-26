@@ -7,7 +7,7 @@ public class PurchaseItem {
     private Integer purchaseItemId;
     private Integer purchaseId;
     private Integer productId;
-    private BigDecimal quantity;
+    private Integer quantity;
     private BigDecimal unitCost;
     private BigDecimal lineTotal;
 
@@ -15,7 +15,7 @@ public class PurchaseItem {
     }
 
     public PurchaseItem(Integer purchaseItemId, Integer purchaseId, Integer productId,
-                        BigDecimal quantity, BigDecimal unitCost, BigDecimal lineTotal) {
+                        Integer quantity, BigDecimal unitCost, BigDecimal lineTotal) {
         this.purchaseItemId = purchaseItemId;
         this.purchaseId = purchaseId;
         this.productId = productId;
@@ -48,11 +48,11 @@ public class PurchaseItem {
         this.productId = productId;
     }
 
-    public BigDecimal getQuantity() {
+    public Integer getQuantity() {
         return quantity;
     }
 
-    public void setQuantity(BigDecimal quantity) {
+    public void setQuantity(Integer quantity) {
         this.quantity = quantity;
     }
 

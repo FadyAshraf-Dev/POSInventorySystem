@@ -1,6 +1,8 @@
 package org.example.posinventorysystem.model;
 
 public class Customer {
+    private String address;
+
 
     private Integer customerId;
     private String customerName;
@@ -38,6 +40,9 @@ public class Customer {
     public void setPhone(String phone) {
         this.phone = phone;
     }
+
+    public String getAddress() { return address; }
+    public void setAddress(String address) { this.address = address; }
 
     @Override
     public String toString() {

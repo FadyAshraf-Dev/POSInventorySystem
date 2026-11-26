@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 public class Purchase {
+    private String status = "completed";
+
 
     private Integer purchaseId;
     private String referenceNo;
@@ -72,6 +74,9 @@ public class Purchase {
     public void setTotal(BigDecimal total) {
         this.total = total;
     }
+
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
 
     @Override
     public String toString() {

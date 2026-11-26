@@ -3,6 +3,8 @@ package org.example.posinventorysystem.model;
 import java.math.BigDecimal;
 
 public class Product {
+    private boolean active = true;
+
 
     private Integer productId;
     private String barcode;
@@ -102,6 +104,9 @@ public class Product {
     public void setReorderLevel(Integer reorderLevel) {
         this.reorderLevel = reorderLevel;
     }
+
+    public boolean isActive() { return active; }
+    public void setActive(boolean active) { this.active = active; }
 
     @Override
     public String toString() {

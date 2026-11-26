@@ -3,6 +3,8 @@ package org.example.posinventorysystem.model;
 import java.math.BigDecimal;
 
 public class SaleItem {
+    private BigDecimal discount = BigDecimal.ZERO;
+
 
     private Integer saleItemId;
     private Integer saleId;
@@ -71,6 +73,9 @@ public class SaleItem {
     public void setLineTotal(BigDecimal lineTotal) {
         this.lineTotal = lineTotal;
     }
+
+    public BigDecimal getDiscount() { return discount; }
+    public void setDiscount(BigDecimal discount) { this.discount = discount; }
 
     @Override
     public String toString() {

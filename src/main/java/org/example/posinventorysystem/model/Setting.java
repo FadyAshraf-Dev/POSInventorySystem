@@ -3,6 +3,10 @@ package org.example.posinventorysystem.model;
 import java.math.BigDecimal;
 
 public class Setting {
+    private String storeAddress;
+    private String storePhone;
+    private String storeEmail;
+
 
     private Integer settingId;
     private String storeName;
@@ -50,6 +54,13 @@ public class Setting {
     public void setTaxRate(BigDecimal taxRate) {
         this.taxRate = taxRate;
     }
+
+    public String getStoreAddress() { return storeAddress; }
+    public String getStorePhone() { return storePhone; }
+    public String getStoreEmail() { return storeEmail; }
+    public void setStoreAddress(String storeAddress) { this.storeAddress = storeAddress; }
+    public void setStorePhone(String storePhone) { this.storePhone = storePhone; }
+    public void setStoreEmail(String storeEmail) { this.storeEmail = storeEmail; }
 
     @Override
     public String toString() {

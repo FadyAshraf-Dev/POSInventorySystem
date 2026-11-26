@@ -3,6 +3,8 @@ package org.example.posinventorysystem.model;
 import java.time.LocalDateTime;
 
 public class Movement {
+    private String reason;
+
 
     private Integer movementId;
     private Integer productId;
@@ -82,6 +84,9 @@ public class Movement {
     public void setMovementDate(LocalDateTime movementDate) {
         this.movementDate = movementDate;
     }
+
+    public String getReason() { return reason; }
+    public void setReason(String reason) { this.reason = reason; }
 
     @Override
     public String toString() {

@@ -257,4 +257,71 @@ public class ProductRepository implements GenericRepository<Product, Integer> {
         product.setActive(rs.getBoolean("is_active"));
         return product;
     }
+
+    /** Searches non-deleted products by name or barcode, including inactive products for inventory-management use. */
+    public List<Product> search(String term) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return search(conn, term);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to search products", e);
+        }
+    }
+
+    public List<Product> search(Connection conn, String term) throws SQLException {
+        if (term == null || term.isBlank()) return List.of();
+        String sql = BASE_SELECT + " WHERE deleted_at IS NULL "
+                + "AND (LOWER(product_name) LIKE ? OR LOWER(COALESCE(barcode, '')) LIKE ?) "
+                + "ORDER BY product_name, product_id";
+        String pattern = "%" + term.trim().toLowerCase() + "%";
+        List<Product> products = new ArrayList<>();
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, pattern);
+            ps.setString(2, pattern);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) products.add(mapRow(rs));
+            }
+        }
+        return products;
+    }
+
+    /** Active, non-deleted products at or below their configured reorder level. */
+    public List<Product> findLowStock() {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return findLowStock(conn);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to fetch low-stock products", e);
+        }
+    }
+
+    public List<Product> findLowStock(Connection conn) throws SQLException {
+        String sql = BASE_SELECT + " WHERE deleted_at IS NULL AND is_active = 1 "
+                + "AND quantity_in_stock <= reorder_level ORDER BY quantity_in_stock, product_name";
+        List<Product> products = new ArrayList<>();
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) products.add(mapRow(rs));
+        }
+        return products;
+    }
+
+    /** Checks barcode uniqueness across all rows (including soft-deleted rows), matching the global UNIQUE constraint. */
+    public boolean barcodeExists(String barcode, Integer excludeId) {
+        try (Connection conn = HikariDatabaseConfig.getConnection()) {
+            return barcodeExists(conn, barcode, excludeId);
+        } catch (SQLException e) {
+            throw new RepositoryException("Failed to check product barcode", e);
+        }
+    }
+
+    public boolean barcodeExists(Connection conn, String barcode, Integer excludeId) throws SQLException {
+        if (barcode == null || barcode.isBlank()) return false;
+        String sql = excludeId == null
+                ? "SELECT 1 FROM product WHERE barcode = ? LIMIT 1"
+                : "SELECT 1 FROM product WHERE barcode = ? AND product_id <> ? LIMIT 1";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, barcode.trim());
+            if (excludeId != null) ps.setInt(2, excludeId);
+            try (ResultSet rs = ps.executeQuery()) { return rs.next(); }
+        }
+    }
+
 }
