@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.AnchorPane?>
+<?import javafx.scene.text.Font?>
+
+<AnchorPane prefHeight="600.0" prefWidth="950.0" style="-fx-background-color: #FFFFFF;" xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1">
+   <children>
+
+      <!-- Bottom-Left Logout Button -->
+      <Button fx:id="btnLogout" layoutX="14.0" layoutY="552.0" mnemonicParsing="false" style="-fx-background-color: transparent; -fx-text-fill: #E2A416; -fx-font-weight: bold; -fx-cursor: hand;" text="Logout">
+         <font>
+            <Font name="System Bold" size="18.0" />
+         </font>
+      </Button>
+
+      <!-- Main Golden Content Panel -->
+      <AnchorPane layoutX="115.0" layoutY="32.0" prefHeight="552.0" prefWidth="818.0" style="-fx-background-color: #E2A416;">
+         <children>
+            <!-- Header Bar -->
+            <Label fx:id="lblSellerName" layoutX="20.0" layoutY="14.0" text="Cashier_Name" textFill="WHITE">
+               <font>
+                  <Font name="Georgia Bold" size="15.0" />
+               </font>
+            </Label>
+            <Label layoutX="300.0" layoutY="10.0" text="Welcome, Cashier" textFill="WHITE">
+               <font>
+                  <Font name="Georgia Bold" size="22.0" />
+               </font>
+            </Label>
+            <Label fx:id="lblDate" layoutX="695.0" layoutY="28.0" text="1/1/2021" textFill="WHITE">
+               <font>
+                  <Font name="Georgia Bold" size="14.0" />
+               </font>
+            </Label>
+
+            <!-- Left Product Input Form -->
+            <Label layoutX="20.0" layoutY="64.0" text="Name" textFill="WHITE">
+               <font>
+                  <Font name="Georgia Bold" size="14.0" />
+               </font>
+            </Label>
+            <TextField fx:id="txtProdName" layoutX="100.0" layoutY="57.0" prefHeight="30.0" prefWidth="175.0" style="-fx-background-color: #FFFFFF; -fx-background-radius: 15; -fx-border-radius: 15; -fx-padding: 4 12 4 12; -fx-font-weight: bold;" />
+
+            <Label layoutX="20.0" layoutY="105.0" text="Price" textFill="WHITE">
+               <font>
+                  <Font name="Georgia Bold" size="14.0" />
+               </font>
+            </Label>
+            <TextField fx:id="txtProdPrice" layoutX="100.0" layoutY="98.0" prefHeight="30.0" prefWidth="175.0" style="-fx-background-color: #FFFFFF; -fx-background-radius: 15; -fx-border-radius: 15; -fx-padding: 4 12 4 12; -fx-font-weight: bold;" />
+
+            <Label layoutX="20.0" layoutY="146.0" text="Quantity" textFill="WHITE">
+               <font>
+                  <Font name="Georgia Bold" size="14.0" />
+               </font>
+            </Label>
+            <TextField fx:id="txtProdQty" layoutX="100.0" layoutY="139.0" prefHeight="30.0" prefWidth="175.0" style="-fx-background-color: #FFFFFF; -fx-background-radius: 15; -fx-border-radius: 15; -fx-padding: 4 12 4 12; -fx-font-weight: bold;" />
+
+            <Button fx:id="btnAddOrder" layoutX="162.0" layoutY="190.0" mnemonicParsing="false" style="-fx-background-color: transparent; -fx-text-fill: #FFFFFF; -fx-font-family: Georgia; -fx-font-weight: bold; -fx-font-size: 14px; -fx-cursor: hand;" text="Add Order" />
+
+            <!-- Top-Right Cart / Current Order Table -->
+            <TableView fx:id="tblOrder" layoutX="298.0" layoutY="50.0" prefHeight="135.0" prefWidth="500.0" style="-fx-base: #5C6BC0; -fx-control-inner-background: #FFFFFF;">
+               <columns>
+                  <TableColumn fx:id="colOrderProdId" prefWidth="75.0" style="-fx-background-color: #5C6BC0; -fx-font-family: Georgia; -fx-font-weight: bold;" text="ProdId" />
+                  <TableColumn fx:id="colOrderProdName" prefWidth="125.0" style="-fx-background-color: #5C6BC0; -fx-font-family: Georgia; -fx-font-weight: bold;" text="ProdName" />
+                  <TableColumn fx:id="colOrderProdPrice" prefWidth="100.0" style="-fx-background-color: #5C6BC0; -fx-font-family: Georgia; -fx-font-weight: bold;" text="ProdPrice" />
+                  <TableColumn fx:id="colOrderProdQty" prefWidth="100.0" style="-fx-background-color: #5C6BC0; -fx-font-family: Georgia; -fx-font-weight: bold;" text="ProdQty" />
+                  <TableColumn fx:id="colOrderTotal" prefWidth="100.0" style="-fx-background-color: #5C6BC0; -fx-font-family: Georgia; -fx-font-weight: bold;" text="Total" />
+               </columns>
+            </TableView>
+
+            <Label layoutX="455.0" layoutY="195.0" text="Amount" textFill="WHITE">
+               <font>
+                  <Font name="Georgia Bold" size="14.0" />
+               </font>
+            </Label>
+            <Label fx:id="lblTotalAmount" layoutX="620.0" layoutY="195.0" text="Ks" textFill="WHITE">
+               <font>
+                  <Font name="Georgia Bold" size="14.0" />
+               </font>
+            </Label>
+
+
+            <ComboBox fx:id="cmbCategory" layoutX="20.0" layoutY="255.0" prefHeight="28.0" prefWidth="160.0" style="-fx-background-color: #FFFFFF;" />
+            <Button fx:id="btnRefresh" layoutX="188.0" layoutY="254.0" mnemonicParsing="false" style="-fx-background-color: transparent; -fx-text-fill: #FFFFFF; -fx-font-family: Georgia; -fx-font-weight: bold; -fx-font-size: 14px; -fx-cursor: hand;" text="Refresh" />
+
+            <TableView fx:id="tblProducts" layoutX="20.0" layoutY="295.0" prefHeight="210.0" prefWidth="245.0" style="-fx-base: #2B78E4; -fx-control-inner-background: #FFFFFF;">
+               <columns>
+                  <TableColumn fx:id="colProdName" prefWidth="135.0" style="-fx-background-color: #2B78E4; -fx-font-family: Georgia; -fx-font-weight: bold;" text="ProdName" />
+                  <TableColumn fx:id="colProdPrice" prefWidth="110.0" style="-fx-background-color: #2B78E4; -fx-font-family: Georgia; -fx-font-weight: bold;" text="ProdPrice" />
+               </columns>
+            </TableView>
+
+            <!-- Bottom-Right Sells List & Bill Controls -->
+            <Label layoutX="298.0" layoutY="265.0" text="Sells List" textFill="WHITE">
+               <font>
+                  <Font name="Georgia Bold" size="14.0" />
+               </font>
+            </Label>
+            <Label layoutX="525.0" layoutY="265.0" text="BillId" textFill="WHITE">
+               <font>
+                  <Font name="Georgia Bold" size="14.0" />
+               </font>
+            </Label>
+            <TextField fx:id="txtBillId" layoutX="582.0" layoutY="258.0" prefHeight="30.0" prefWidth="115.0" style="-fx-background-color: #FFFFFF; -fx-background-radius: 15; -fx-border-radius: 15; -fx-padding: 4 12 4 12; -fx-font-weight: bold;" />
+            <Button fx:id="btnAddBill" layoutX="725.0" layoutY="258.0" mnemonicParsing="false" style="-fx-background-color: transparent; -fx-text-fill: #FFFFFF; -fx-font-family: Georgia; -fx-font-weight: bold; -fx-font-size: 14px; -fx-cursor: hand;" text="Add" />
+
+            <TableView fx:id="tblSellsList" layoutX="298.0" layoutY="295.0" prefHeight="210.0" prefWidth="500.0" style="-fx-base: #5C6BC0; -fx-control-inner-background: #FFFFFF;">
+               <columns>
+                  <TableColumn fx:id="colBillId" prefWidth="105.0" style="-fx-background-color: #5C6BC0; -fx-font-family: Georgia; -fx-font-weight: bold;" text="BillId" />
+                  <TableColumn fx:id="colSellerName" prefWidth="145.0" style="-fx-background-color: #5C6BC0; -fx-font-family: Georgia; -fx-font-weight: bold;" text="SellerName" />
+                  <TableColumn fx:id="colSellDate" prefWidth="125.0" style="-fx-background-color: #5C6BC0; -fx-font-family: Georgia; -fx-font-weight: bold;" text="SellDate" />
+                  <TableColumn fx:id="colTotalAmt" prefWidth="125.0" style="-fx-background-color: #5C6BC0; -fx-font-family: Georgia; -fx-font-weight: bold;" text="TotalAmt" />
+               </columns>
+            </TableView>
+
+            <Button fx:id="btnPrint" layoutX="728.0" layoutY="512.0" mnemonicParsing="false" style="-fx-background-color: transparent; -fx-text-fill: #FFFFFF; -fx-font-family: Georgia; -fx-font-weight: bold; -fx-font-size: 14px; -fx-cursor: hand;" text="Print" />
+         </children>
+      </AnchorPane>
+   </children>
+</AnchorPane>
