@@ -7,55 +7,77 @@ import java.sql.Connection;
 import java.sql.SQLException;
 
 /**
- * Pooled connection factory using HikariCP.
- * One pool (one HikariDataSource) is created ONCE per app run — this is the
- * "singleton manager" part. DAOs then borrow/return connections from it
- * instead of opening a fresh TCP connection every time.
- *
- * Maven dependency needed in pom.xml:
- * <dependency>
- *     <groupId>com.zaxxer</groupId>
- *     <artifactId>HikariCP</artifactId>
- *     <version>6.2.1</version>
- * </dependency>
+ * Lazy connection-pool manager for the application.
+ * The pool is created only when the first connection is requested, rather than
+ * during class initialization. This means a database outage produces a useful
+ * SQLException instead of poisoning class initialization for the entire JVM.
  */
-public class HikariDatabaseConfig {
+public final class HikariDatabaseConfig {
 
-    private static final HikariDataSource dataSource;
-
-    static {
-        HikariConfig config = new HikariConfig();
-        config.setJdbcUrl("jdbc:mysql://localhost:3306/posinventorysystem?useSSL=false&serverTimezone=UTC");
-        config.setUsername("root");
-        config.setPassword("asdasd"); // TODO: move to a config file / env var
-
-        // Pool sizing — fine defaults for a desktop app with modest concurrency
-        config.setMaximumPoolSize(10);
-        config.setMinimumIdle(2);
-        config.setConnectionTimeout(30_000); // ms to wait for a free connection before throwing
-        config.setIdleTimeout(600_000);      // ms an idle connection can sit before being closed
-        config.setMaxLifetime(1_800_000);    // ms before a connection is recycled, even if in use less often
-
-        dataSource = new HikariDataSource(config);
-    }
+    private static volatile HikariDataSource dataSource;
 
     private HikariDatabaseConfig() {
-        // prevent instantiation — the pool itself lives in the static field above
+        // Utility class; the pool is managed statically.
+    }
+
+    private static HikariDataSource getDataSource() throws SQLException {
+        HikariDataSource current = dataSource;
+        if (current != null && !current.isClosed()) {
+            return current;
+        }
+
+        synchronized (HikariDatabaseConfig.class) {
+            current = dataSource;
+            if (current != null && !current.isClosed()) {
+                return current;
+            }
+
+            HikariConfig config = new HikariConfig();
+            config.setJdbcUrl("jdbc:mysql://localhost:3306/posinventorysystem?useSSL=false&serverTimezone=UTC");
+            config.setUsername("root");
+            config.setPassword("asdasd"); // Credentials intentionally left as-is for this student project.
+
+            // Pool sizing — sensible defaults for a desktop app with modest concurrency.
+            config.setMaximumPoolSize(10);
+            config.setMinimumIdle(2);
+            config.setConnectionTimeout(30_000);
+            config.setIdleTimeout(600_000);
+            config.setMaxLifetime(1_800_000);
+
+            try {
+                dataSource = new HikariDataSource(config);
+                return dataSource;
+            } catch (RuntimeException e) {
+                throw new SQLException(
+                        "Could not initialize the MySQL connection pool. Make sure MySQL is running, "
+                                + "the 'posinventorysystem' database exists, and the configured credentials are correct.",
+                        e);
+            }
+        }
     }
 
     /**
-     * Borrows a connection from the pool.
-     * IMPORTANT: callers must close() it when done — Hikari intercepts close()
-     * to mean "return to pool," not "actually disconnect." Use try-with-resources.
+     * Borrows a connection from the pool. Callers must close it (preferably via
+     * try-with-resources); Hikari returns it to the pool rather than disconnecting.
      */
     public static Connection getConnection() throws SQLException {
-        return dataSource.getConnection();
+        try {
+            return getDataSource().getConnection();
+        } catch (SQLException e) {
+            throw new SQLException(
+                    "Unable to obtain a MySQL connection for POSInventorySystem. "
+                            + "Check that MySQL is running and that the database and credentials are valid.",
+                    e);
+        }
     }
 
-    /** Call once on app shutdown to cleanly close the pool. */
+    /** Closes the pool if it was initialized. Safe to call more than once. */
     public static void shutdown() {
-        if (dataSource != null && !dataSource.isClosed()) {
-            dataSource.close();
+        synchronized (HikariDatabaseConfig.class) {
+            if (dataSource != null && !dataSource.isClosed()) {
+                dataSource.close();
+            }
+            dataSource = null;
         }
     }
 }
