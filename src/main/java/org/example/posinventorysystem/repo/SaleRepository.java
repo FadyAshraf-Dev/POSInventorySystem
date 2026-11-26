@@ -53,12 +53,12 @@ public class SaleRepository implements GenericRepository<Sale, Integer> {
     
     @Override
     public boolean softDelete(Integer id) {
-        return org.example.posinventorysystem.data.TransactionManager.run(conn -> softDelete(conn, id));
+        return TransactionManager.run(conn -> softDelete(conn, id));
     }
 
     @Override
     public boolean restore(Integer id) {
-        return org.example.posinventorysystem.data.TransactionManager.run(conn -> restore(conn, id));
+        return TransactionManager.run(conn -> restore(conn, id));
     }
 
     public Optional<Sale> findById(Connection conn, Integer id) throws SQLException {
