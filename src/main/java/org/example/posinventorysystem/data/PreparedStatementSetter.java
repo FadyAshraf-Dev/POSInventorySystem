@@ -1,4 +1,4 @@
-package org.example.posinventorysystem.repo;
+package org.example.posinventorysystem.data;
 
 import java.sql.PreparedStatement;
 import java.sql.SQLException;

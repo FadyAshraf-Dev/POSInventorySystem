@@ -1,6 +1,6 @@
 package org.example.posinventorysystem.repo;
 
-import org.example.posinventorysystem.data.HikariDatabaseConfig;
+import org.example.posinventorysystem.data.JdbcExecutor;
 import org.example.posinventorysystem.model.Purchase;
 
 import java.sql.*;

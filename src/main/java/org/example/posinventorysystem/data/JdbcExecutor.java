@@ -1,6 +1,6 @@
-package org.example.posinventorysystem.repo;
+package org.example.posinventorysystem.data;
 
-import org.example.posinventorysystem.data.HikariDatabaseConfig;
+import org.example.posinventorysystem.repo.RepositoryException;
 
 import java.sql.*;
 import java.util.ArrayList;
