@@ -2,7 +2,6 @@ package org.example.posinventorysystem.repo;
 
 import org.example.posinventorysystem.data.HikariDatabaseConfig;
 import org.example.posinventorysystem.model.Sale;
-import org.example.posinventorysystem.repo.TransactionManager;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -173,65 +172,4 @@ public class SaleRepository implements GenericRepository<Sale, Integer> {
         sale.setStatus(rs.getString("status"));
         return sale;
     }
-
-    /** Finds non-deleted sales in the inclusive date/time range. */
-    public List<Sale> findByDateRange(java.time.LocalDateTime from, java.time.LocalDateTime to) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findByDateRange(conn, from, to);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to fetch sales for date range", e);
-        }
-    }
-
-    public List<Sale> findByDateRange(Connection conn, java.time.LocalDateTime from,
-                                       java.time.LocalDateTime to) throws SQLException {
-        if (from == null || to == null || from.isAfter(to))
-            throw new IllegalArgumentException("Date range must have non-null endpoints and from <= to");
-        String sql = BASE_SELECT + " WHERE deleted_at IS NULL AND sale_date >= ? AND sale_date <= ? "
-                + "ORDER BY sale_date, sale_id";
-        List<Sale> sales = new ArrayList<>();
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setObject(1, from);
-            ps.setObject(2, to);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) sales.add(mapRow(rs));
-            }
-        }
-        return sales;
-    }
-
-    public Optional<Sale> findByInvoiceNo(String invoiceNo) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findByInvoiceNo(conn, invoiceNo);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to find sale by invoice number: " + invoiceNo, e);
-        }
-    }
-
-    public Optional<Sale> findByInvoiceNo(Connection conn, String invoiceNo) throws SQLException {
-        String sql = BASE_SELECT + " WHERE invoice_no = ? AND deleted_at IS NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, invoiceNo);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
-            }
-        }
-    }
-
-    /** Returns the invoice number of the newest non-deleted sale, or empty when none exists. */
-    public Optional<String> findLastInvoiceNo() {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findLastInvoiceNo(conn);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to find last invoice number", e);
-        }
-    }
-
-    public Optional<String> findLastInvoiceNo(Connection conn) throws SQLException {
-        String sql = "SELECT invoice_no FROM sale WHERE deleted_at IS NULL ORDER BY sale_id DESC LIMIT 1";
-        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
-            return rs.next() ? Optional.of(rs.getString("invoice_no")) : Optional.empty();
-        }
-    }
-
 }

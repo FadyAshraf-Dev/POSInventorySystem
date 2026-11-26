@@ -134,45 +134,4 @@ public class CustomerRepository implements GenericRepository<Customer, Integer> 
         customer.setAddress(rs.getString("address"));
         return customer;
     }
-
-    /** Case-insensitive search across customer name and phone for non-deleted records. */
-    public List<Customer> search(String term) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return search(conn, term);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to search customers", e);
-        }
-    }
-
-    public List<Customer> search(Connection conn, String term) throws SQLException {
-        if (term == null || term.isBlank()) return List.of();
-        String sql = "SELECT customer_id, customer_name, phone, address FROM customer WHERE deleted_at IS NULL AND (LOWER(COALESCE(customer_name, '')) LIKE ? OR LOWER(COALESCE(phone, '')) LIKE ? OR LOWER(COALESCE(address, '')) LIKE ?) ORDER BY customer_name, customer_id";
-        String pattern = "%" + term.trim().toLowerCase() + "%";
-        List<Customer> rows = new ArrayList<>();
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            for (int i = 1; i <= 3; i++) ps.setString(i, pattern);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) rows.add(mapRow(rs));
-            }
-        }
-        return rows;
-    }
-
-    /** Returns true if any sale record references this customer, including historical/soft-deleted records. */
-    public boolean hasSales(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return hasSales(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to check references for customer id: " + id, e);
-        }
-    }
-
-    public boolean hasSales(Connection conn, Integer id) throws SQLException {
-        String sql = "SELECT 1 FROM sale WHERE customer_id = ? LIMIT 1";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, id);
-            try (ResultSet rs = ps.executeQuery()) { return rs.next(); }
-        }
-    }
-
 }

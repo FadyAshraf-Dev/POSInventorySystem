@@ -134,45 +134,4 @@ public class SupplierRepository implements GenericRepository<Supplier, Integer> 
         supplier.setAddress(rs.getString("address"));
         return supplier;
     }
-
-    /** Case-insensitive search across supplier name and phone for non-deleted records. */
-    public List<Supplier> search(String term) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return search(conn, term);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to search suppliers", e);
-        }
-    }
-
-    public List<Supplier> search(Connection conn, String term) throws SQLException {
-        if (term == null || term.isBlank()) return List.of();
-        String sql = "SELECT supplier_id, supplier_name, phone, address FROM supplier WHERE deleted_at IS NULL AND (LOWER(COALESCE(supplier_name, '')) LIKE ? OR LOWER(COALESCE(phone, '')) LIKE ? OR LOWER(COALESCE(address, '')) LIKE ?) ORDER BY supplier_name, supplier_id";
-        String pattern = "%" + term.trim().toLowerCase() + "%";
-        List<Supplier> rows = new ArrayList<>();
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            for (int i = 1; i <= 3; i++) ps.setString(i, pattern);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) rows.add(mapRow(rs));
-            }
-        }
-        return rows;
-    }
-
-    /** Returns true if any purchase record references this supplier, including historical/soft-deleted records. */
-    public boolean hasPurchases(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return hasPurchases(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to check references for supplier id: " + id, e);
-        }
-    }
-
-    public boolean hasPurchases(Connection conn, Integer id) throws SQLException {
-        String sql = "SELECT 1 FROM purchase WHERE supplier_id = ? LIMIT 1";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, id);
-            try (ResultSet rs = ps.executeQuery()) { return rs.next(); }
-        }
-    }
-
 }

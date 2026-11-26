@@ -128,30 +128,4 @@ public class MovementRepository implements InsertOnlyRepository<Movement, Intege
         movement.setMovementDate(rs.getTimestamp("movement_date").toLocalDateTime());
         return movement;
     }
-
-    /** Returns ledger movements within the inclusive date/time range. */
-    public List<Movement> findByDateRange(java.time.LocalDateTime from, java.time.LocalDateTime to) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return findByDateRange(conn, from, to);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to fetch movements for date range", e);
-        }
-    }
-
-    public List<Movement> findByDateRange(Connection conn, java.time.LocalDateTime from,
-                                           java.time.LocalDateTime to) throws SQLException {
-        if (from == null || to == null || from.isAfter(to))
-            throw new IllegalArgumentException("Date range must have non-null endpoints and from <= to");
-        String sql = BASE_SELECT + " WHERE movement_date >= ? AND movement_date <= ? ORDER BY movement_date, movement_id";
-        List<Movement> movements = new ArrayList<>();
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setObject(1, from);
-            ps.setObject(2, to);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) movements.add(mapRow(rs));
-            }
-        }
-        return movements;
-    }
-
 }

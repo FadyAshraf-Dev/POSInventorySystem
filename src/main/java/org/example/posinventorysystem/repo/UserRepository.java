@@ -170,43 +170,4 @@ public class UserRepository implements GenericRepository<User, Integer> {
         user.setActive(rs.getBoolean("is_active"));
         return user;
     }
-
-    /** Checks username uniqueness across all records, including soft-deleted rows, to match the UNIQUE constraint. */
-    public boolean usernameExists(String username, Integer excludeId) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return usernameExists(conn, username, excludeId);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to check username uniqueness", e);
-        }
-    }
-
-    public boolean usernameExists(Connection conn, String username, Integer excludeId) throws SQLException {
-        if (username == null || username.isBlank()) return false;
-        String sql = excludeId == null
-                ? "SELECT 1 FROM user WHERE username = ? LIMIT 1"
-                : "SELECT 1 FROM user WHERE username = ? AND user_id <> ? LIMIT 1";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, username.trim());
-            if (excludeId != null) ps.setInt(2, excludeId);
-            try (ResultSet rs = ps.executeQuery()) { return rs.next(); }
-        }
-    }
-
-    public boolean setActive(Integer userId, boolean active) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return setActive(conn, userId, active);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to change active state for user id: " + userId, e);
-        }
-    }
-
-    public boolean setActive(Connection conn, Integer userId, boolean active) throws SQLException {
-        String sql = "UPDATE user SET is_active = ? WHERE user_id = ? AND deleted_at IS NULL";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setBoolean(1, active);
-            ps.setInt(2, userId);
-            return ps.executeUpdate() > 0;
-        }
-    }
-
 }

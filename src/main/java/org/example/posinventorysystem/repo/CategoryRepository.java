@@ -128,45 +128,4 @@ public class CategoryRepository implements GenericRepository<Category, Integer> 
         category.setCategoryName(rs.getString("category_name"));
         return category;
     }
-
-    /** Case-insensitive search across category_name for non-deleted records. */
-    public List<Category> search(String term) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return search(conn, term);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to search categories", e);
-        }
-    }
-
-    public List<Category> search(Connection conn, String term) throws SQLException {
-        if (term == null || term.isBlank()) return List.of();
-        String sql = "SELECT category_id, category_name FROM category WHERE deleted_at IS NULL AND LOWER(category_name) LIKE ? ORDER BY category_name, category_id";
-        String pattern = "%" + term.trim().toLowerCase() + "%";
-        List<Category> rows = new ArrayList<>();
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            for (int i = 1; i <= 1; i++) ps.setString(i, pattern);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) rows.add(mapRow(rs));
-            }
-        }
-        return rows;
-    }
-
-    /** Returns true if any product record references this category, including historical/soft-deleted records. */
-    public boolean hasProducts(Integer id) {
-        try (Connection conn = HikariDatabaseConfig.getConnection()) {
-            return hasProducts(conn, id);
-        } catch (SQLException e) {
-            throw new RepositoryException("Failed to check references for category id: " + id, e);
-        }
-    }
-
-    public boolean hasProducts(Connection conn, Integer id) throws SQLException {
-        String sql = "SELECT 1 FROM product WHERE category_id = ? LIMIT 1";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, id);
-            try (ResultSet rs = ps.executeQuery()) { return rs.next(); }
-        }
-    }
-
 }
