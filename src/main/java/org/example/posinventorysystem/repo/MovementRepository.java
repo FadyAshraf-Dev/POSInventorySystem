@@ -81,19 +81,19 @@ public class MovementRepository implements InsertOnlyRepository<Movement, Intege
         return movement;
     }
 
-    /** Returns ledger movements within the inclusive date/time range. */
+    /** Returns ledger movements within the half-open date/time range [from, to). */
     public List<Movement> findByDateRange(java.time.LocalDateTime from, java.time.LocalDateTime to) {
         return JdbcExecutor.withConnection("Failed to fetch movements for date range", conn -> findByDateRange(conn, from, to));
     }
 
     public List<Movement> findByDateRange(Connection conn, java.time.LocalDateTime from,
                                            java.time.LocalDateTime to) throws SQLException {
-        if (from == null || to == null || from.isAfter(to))
-            throw new IllegalArgumentException("Date range must have non-null endpoints and from <= to");
-        String sql = BASE_SELECT + " WHERE movement_date >= ? AND movement_date <= ? ORDER BY movement_date, movement_id";
+        if (from == null || to == null || !from.isBefore(to))
+            throw new IllegalArgumentException("Date range must have non-null endpoints and from < to");
+        String sql = BASE_SELECT + " WHERE movement_date >= ? AND movement_date < ? ORDER BY movement_date, movement_id";
         return JdbcExecutor.query(conn, sql, ps -> {
-            ps.setObject(1, from);
-            ps.setObject(2, to);
+            ps.setTimestamp(1, Timestamp.valueOf(from));
+            ps.setTimestamp(2, Timestamp.valueOf(to));
         }, this::mapRow);
     }
 

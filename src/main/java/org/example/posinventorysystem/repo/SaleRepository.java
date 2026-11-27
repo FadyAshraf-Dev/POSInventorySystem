@@ -131,20 +131,20 @@ public class SaleRepository implements GenericRepository<Sale, Integer> {
         return sale;
     }
 
-    /** Finds non-deleted sales in the inclusive date/time range. */
+    /** Finds non-deleted sales in the half-open date/time range [from, to). */
     public List<Sale> findByDateRange(java.time.LocalDateTime from, java.time.LocalDateTime to) {
         return JdbcExecutor.withConnection("Failed to fetch sales for date range", conn -> findByDateRange(conn, from, to));
     }
 
     public List<Sale> findByDateRange(Connection conn, java.time.LocalDateTime from,
                                        java.time.LocalDateTime to) throws SQLException {
-        if (from == null || to == null || from.isAfter(to))
-            throw new IllegalArgumentException("Date range must have non-null endpoints and from <= to");
-        String sql = BASE_SELECT + " WHERE deleted_at IS NULL AND sale_date >= ? AND sale_date <= ? "
+        if (from == null || to == null || !from.isBefore(to))
+            throw new IllegalArgumentException("Date range must have non-null endpoints and from < to");
+        String sql = BASE_SELECT + " WHERE deleted_at IS NULL AND sale_date >= ? AND sale_date < ? "
                 + "ORDER BY sale_date, sale_id";
         return JdbcExecutor.query(conn, sql, ps -> {
-            ps.setObject(1, from);
-            ps.setObject(2, to);
+            ps.setTimestamp(1, Timestamp.valueOf(from));
+            ps.setTimestamp(2, Timestamp.valueOf(to));
         }, this::mapRow);
     }
 
