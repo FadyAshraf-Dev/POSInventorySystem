@@ -152,7 +152,7 @@ CREATE TABLE sale (
                       CONSTRAINT chk_sale_discount_nonneg CHECK (discount >= 0),
                       CONSTRAINT chk_sale_tax_nonneg CHECK (tax >= 0),
                       CONSTRAINT chk_sale_total_nonneg CHECK (total >= 0),
-                      CONSTRAINT chk_sale_status CHECK (status IN ('completed', 'cancelled', 'refunded'))
+                      CONSTRAINT chk_sale_status CHECK (status IN ('completed', 'cancelled', 'refunded', 'held'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ------------------------------------------------------------

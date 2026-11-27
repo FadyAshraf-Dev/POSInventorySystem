@@ -148,6 +148,16 @@ public class SaleRepository implements GenericRepository<Sale, Integer> {
         }, this::mapRow);
     }
 
+    /** Finds non-deleted sales with the given status (e.g. "held"), newest first. */
+    public List<Sale> findByStatus(String status) {
+        return JdbcExecutor.withConnection("Failed to find sales by status: " + status, conn -> findByStatus(conn, status));
+    }
+
+    public List<Sale> findByStatus(Connection conn, String status) throws SQLException {
+        String sql = BASE_SELECT + " WHERE status = ? AND deleted_at IS NULL ORDER BY sale_date DESC, sale_id DESC";
+        return JdbcExecutor.query(conn, sql, ps -> { ps.setString(1, status); }, this::mapRow);
+    }
+
     public Optional<Sale> findByInvoiceNo(String invoiceNo) {
         return JdbcExecutor.withConnection("Failed to find sale by invoice number: " + invoiceNo, conn -> findByInvoiceNo(conn, invoiceNo));
     }

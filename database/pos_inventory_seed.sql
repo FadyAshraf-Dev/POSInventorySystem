@@ -121,14 +121,16 @@ INSERT INTO movement (movement_id, product_id, movement_type, quantity_change, r
 INSERT INTO sale (sale_id, invoice_no, sale_date, user_id, customer_id, subtotal, discount, tax, total, status) VALUES
                                                                                                                     (1, 'INV-2026-0001', '2026-11-20 11:05:00', 3, 2, 420.00, 0.00, 65.80, 485.80, 'completed'),
                                                                                                                     (2, 'INV-2026-0002', '2026-11-21 16:40:00', 3, 1, 670.00, 20.00, 91.00, 741.00, 'completed'),
-                                                                                                                    (3, 'INV-2026-0003', '2026-11-22 13:20:00', 2, 3, 120.00, 0.00, 16.80, 136.80, 'completed');
+                                                                                                                    (3, 'INV-2026-0003', '2026-11-22 13:20:00', 2, 3, 120.00, 0.00, 16.80, 136.80, 'completed'),
+                                                                                                                    (4, 'INV-2026-0004', '2026-11-23 10:00:00', 2, NULL, 120.00, 0.00, 16.80, 136.80, 'held');
 
 INSERT INTO sale_item (sale_item_id, sale_id, product_id, quantity, unit_price, unit_cost, discount, line_total) VALUES
                                                                                                           (1, 1, 1, 2, 150.00, 80.00, 0.00, 300.00),
                                                                                                           (2, 1, 7, 1, 120.00, 60.00, 0.00, 120.00),
                                                                                                           (3, 2, 5, 1, 550.00, 300.00, 0.00, 550.00),
                                                                                                           (4, 2, 7, 1, 120.00, 60.00, 0.00, 120.00),
-                                                                                                          (5, 3, 7, 1, 120.00, 60.00, 0.00, 120.00);
+                                                                                                          (5, 3, 7, 1, 120.00, 60.00, 0.00, 120.00),
+                                                                                                          (6, 4, 7, 1, 120.00, 60.00, 0.00, 120.00);
 
 INSERT INTO payment (payment_id, sale_id, method, amount, payment_date) VALUES
                                                                             (1, 1, 'cash', 485.80, '2026-11-20 11:06:00'),
