@@ -101,6 +101,23 @@ public class PurchaseRepository implements GenericRepository<Purchase, Integer> 
         return JdbcExecutor.executeUpdate(conn, sql, ps -> { ps.setInt(1, id); }) > 0;
     }
 
+    /** Finds non-deleted purchases in the half-open date/time range [from, to). */
+    public List<Purchase> findByDateRange(java.time.LocalDateTime from, java.time.LocalDateTime to) {
+        return JdbcExecutor.withConnection("Failed to fetch purchases for date range", conn -> findByDateRange(conn, from, to));
+    }
+
+    public List<Purchase> findByDateRange(Connection conn, java.time.LocalDateTime from,
+                                           java.time.LocalDateTime to) throws SQLException {
+        if (from == null || to == null || !from.isBefore(to))
+            throw new IllegalArgumentException("Date range must have non-null endpoints and from < to");
+        String sql = BASE_SELECT + " WHERE deleted_at IS NULL AND purchase_date >= ? AND purchase_date < ? "
+                + "ORDER BY purchase_date, purchase_id";
+        return JdbcExecutor.query(conn, sql, ps -> {
+            ps.setTimestamp(1, Timestamp.valueOf(from));
+            ps.setTimestamp(2, Timestamp.valueOf(to));
+        }, this::mapRow);
+    }
+
     private Purchase mapRow(ResultSet rs) throws SQLException {
         Purchase purchase = new Purchase();
         purchase.setPurchaseId(rs.getInt("purchase_id"));
