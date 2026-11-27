@@ -33,7 +33,7 @@ public final class HikariDatabaseConfig {
             }
 
             HikariConfig config = new HikariConfig();
-            config.setJdbcUrl("jdbc:mysql://localhost:3306/posinventorysystem?useSSL=false&serverTimezone=UTC");
+            config.setJdbcUrl("jdbc:mysql://localhost:3306/posinventorysystem?useSSL=false&serverTimezone=UTC+2");
             config.setUsername("root");
             config.setPassword("asdasd"); // Credentials intentionally left as-is for this student project.
 

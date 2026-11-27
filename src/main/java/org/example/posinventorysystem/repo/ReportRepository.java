@@ -18,9 +18,13 @@ import java.util.List;
  * resources are closed centrally.
  *
  * Conventions used throughout this class:
- *   - every query ignores soft-deleted rows (deleted_at IS NULL) on every
- *     table it touches (sale, sale_item, purchase, purchase_item, product,
- *     category, supplier, user);
+ *   - every query ignores soft-deleted transactional rows (deleted_at IS NULL
+ *     on sale, sale_item, purchase, purchase_item). Historical reports do NOT
+ *     filter on soft-deleted master data (product, category, supplier, user):
+ *     a product/category/supplier that was soft-deleted later still keeps its
+ *     past sales/purchases in the figures, so grouped totals stay consistent
+ *     with the overall totals. Only the current-state snapshots
+ *     (inventoryValue, findOutOfStock) exclude soft-deleted products;
  *   - every sales figure counts only status = 'completed' sales (held,
  *     cancelled and refunded sales are excluded);
  *   - every date-range parameter is treated as half-open: [from, to). The
@@ -98,9 +102,16 @@ public class ReportRepository {
     // ------------------------------------------------------------------
 
     /**
-     * Gross profit for completed, non-deleted sales in [from, to).
-     * profit = SUM(line_total - quantity * unit_cost), using the unit_cost
-     * snapshot stored on each sale item.
+     * Gross profit for completed, non-deleted sales in [from, to), AFTER
+     * invoice-level discounts and BEFORE tax:
+     *   revenue = SUM(sale_item.line_total) - SUM(sale.discount)
+     *   cost    = SUM(quantity * unit_cost), using the unit_cost snapshot
+     *             stored on each sale item
+     *   profit  = revenue - cost
+     * sale_item.line_total already includes any line-level discount; the
+     * invoice-level discount (sale.discount) is subtracted once per sale.
+     * Tax is excluded, so revenue here differs from totalSales (which is
+     * sale.total, i.e. includes tax).
      */
     public ProfitSummary profitSummary(LocalDateTime from, LocalDateTime to) {
         return JdbcExecutor.withConnection("Failed to fetch profit summary", conn -> profitSummary(conn, from, to));
@@ -108,10 +119,18 @@ public class ReportRepository {
 
     public ProfitSummary profitSummary(Connection conn, LocalDateTime from, LocalDateTime to) throws SQLException {
         validateRange(from, to);
+        // Invoice-level discounts are summed in a separate subquery so they are
+        // counted once per sale, not once per sale_item row.
         String sql = "SELECT "
-                + "COALESCE(SUM(si.line_total), 0) AS revenue, "
+                + "COALESCE(SUM(si.line_total), 0) - "
+                + "COALESCE((SELECT SUM(d.discount) FROM sale d "
+                + "WHERE d.deleted_at IS NULL AND d.status = 'completed' "
+                + "AND d.sale_date >= ? AND d.sale_date < ?), 0) AS revenue, "
                 + "COALESCE(SUM(si.quantity * si.unit_cost), 0) AS cost, "
-                + "COALESCE(SUM(si.line_total - si.quantity * si.unit_cost), 0) AS profit "
+                + "COALESCE(SUM(si.line_total - si.quantity * si.unit_cost), 0) - "
+                + "COALESCE((SELECT SUM(d2.discount) FROM sale d2 "
+                + "WHERE d2.deleted_at IS NULL AND d2.status = 'completed' "
+                + "AND d2.sale_date >= ? AND d2.sale_date < ?), 0) AS profit "
                 + "FROM sale_item si "
                 + "INNER JOIN sale s ON s.sale_id = si.sale_id "
                 + "WHERE s.deleted_at IS NULL AND s.status = 'completed' "
@@ -120,6 +139,10 @@ public class ReportRepository {
         return JdbcExecutor.queryOne(conn, sql, ps -> {
             ps.setTimestamp(1, Timestamp.valueOf(from));
             ps.setTimestamp(2, Timestamp.valueOf(to));
+            ps.setTimestamp(3, Timestamp.valueOf(from));
+            ps.setTimestamp(4, Timestamp.valueOf(to));
+            ps.setTimestamp(5, Timestamp.valueOf(from));
+            ps.setTimestamp(6, Timestamp.valueOf(to));
         }, rs -> new ProfitSummary(
                 getAmount(rs, "revenue"),
                 getAmount(rs, "cost"),
@@ -188,8 +211,10 @@ public class ReportRepository {
 
     /**
      * Top-selling products in [from, to), ranked by quantity sold then
-     * revenue. Only completed, non-deleted sales/sale_items/products count;
-     * profit uses sale_item.unit_cost.
+     * revenue. Only completed, non-deleted sales/sale_items count; products
+     * that were soft-deleted later are still included, so their past sales
+     * don't disappear. Revenue and profit are at line level (before any
+     * invoice-level discount); profit uses sale_item.unit_cost.
      */
     public List<TopSellingProduct> topSellingProducts(LocalDateTime from, LocalDateTime to, int limit) {
         return JdbcExecutor.withConnection("Failed to fetch top-selling products", conn -> topSellingProducts(conn, from, to, limit));
@@ -208,7 +233,7 @@ public class ReportRepository {
                 + "INNER JOIN sale s ON s.sale_id = si.sale_id "
                 + "INNER JOIN product p ON p.product_id = si.product_id "
                 + "WHERE s.deleted_at IS NULL AND s.status = 'completed' "
-                + "AND si.deleted_at IS NULL AND p.deleted_at IS NULL "
+                + "AND si.deleted_at IS NULL "
                 + "AND s.sale_date >= ? AND s.sale_date < ? "
                 + "GROUP BY p.product_id, p.product_name "
                 + "ORDER BY qty_sold DESC, revenue DESC, p.product_name ASC "
@@ -235,6 +260,15 @@ public class ReportRepository {
      * A sale is attributed to a method by summing its payment rows; a sale
      * with no payment rows contributes nothing here (it is not "unpaid" —
      * there is simply no method to group it under).
+     *
+     * count = number of distinct invoices that used the method (a split-payment
+     * invoice counts once under each method it used, not once per payment row).
+     *
+     * total = payment amounts, but never more than the invoice total: if a
+     * sale's payments add up to more than sale.total (e.g. the cashier
+     * recorded the amount tendered, 200, for a 150 invoice), each payment is
+     * scaled down proportionally so the sale contributes exactly sale.total.
+     * Under-paid sales are not scaled up.
      */
     public List<SalesByPaymentMethod> salesByPaymentMethod(LocalDateTime from, LocalDateTime to) {
         return JdbcExecutor.withConnection("Failed to fetch sales by payment method", conn -> salesByPaymentMethod(conn, from, to));
@@ -242,9 +276,14 @@ public class ReportRepository {
 
     public List<SalesByPaymentMethod> salesByPaymentMethod(Connection conn, LocalDateTime from, LocalDateTime to) throws SQLException {
         validateRange(from, to);
-        String sql = "SELECT pay.method AS method, SUM(pay.amount) AS total, COUNT(*) AS cnt "
+        String sql = "SELECT pay.method AS method, "
+                + "ROUND(SUM(CASE WHEN pt.paid > s.total AND pt.paid > 0 "
+                + "THEN pay.amount * s.total / pt.paid ELSE pay.amount END), 2) AS total, "
+                + "COUNT(DISTINCT s.sale_id) AS cnt "
                 + "FROM payment pay "
                 + "INNER JOIN sale s ON s.sale_id = pay.sale_id "
+                + "INNER JOIN (SELECT sale_id, SUM(amount) AS paid FROM payment GROUP BY sale_id) pt "
+                + "ON pt.sale_id = pay.sale_id "
                 + "WHERE s.deleted_at IS NULL AND s.status = 'completed' "
                 + "AND s.sale_date >= ? AND s.sale_date < ? "
                 + "GROUP BY pay.method "
@@ -297,6 +336,9 @@ public class ReportRepository {
      * Completed, non-deleted sales in [from, to), grouped by the product
      * category of each sale line (via sale_item -> product -> category).
      * A multi-category sale contributes to each category it touches.
+     * Soft-deleted products/categories are still included so historical
+     * sales stay in the report. Totals are sums of line_total (before
+     * invoice-level discount and tax), so they will not equal totalSales.
      */
     public List<SalesByCategory> salesByCategory(LocalDateTime from, LocalDateTime to) {
         return JdbcExecutor.withConnection("Failed to fetch sales by category", conn -> salesByCategory(conn, from, to));
@@ -311,7 +353,7 @@ public class ReportRepository {
                 + "INNER JOIN product p ON p.product_id = si.product_id "
                 + "INNER JOIN category c ON c.category_id = p.category_id "
                 + "WHERE s.deleted_at IS NULL AND s.status = 'completed' "
-                + "AND si.deleted_at IS NULL AND p.deleted_at IS NULL AND c.deleted_at IS NULL "
+                + "AND si.deleted_at IS NULL "
                 + "AND s.sale_date >= ? AND s.sale_date < ? "
                 + "GROUP BY c.category_id, c.category_name "
                 + "ORDER BY total DESC";
@@ -329,7 +371,11 @@ public class ReportRepository {
     // purchasesBySupplier
     // ------------------------------------------------------------------
 
-    /** Completed, non-deleted purchases in [from, to), grouped by supplier. */
+    /**
+     * Completed, non-deleted purchases in [from, to), grouped by supplier.
+     * Soft-deleted suppliers are still included so historical purchases
+     * stay in the report.
+     */
     public List<PurchasesBySupplier> purchasesBySupplier(LocalDateTime from, LocalDateTime to) {
         return JdbcExecutor.withConnection("Failed to fetch purchases by supplier", conn -> purchasesBySupplier(conn, from, to));
     }
@@ -341,7 +387,6 @@ public class ReportRepository {
                 + "FROM purchase p "
                 + "INNER JOIN supplier sup ON sup.supplier_id = p.supplier_id "
                 + "WHERE p.deleted_at IS NULL AND p.status = 'completed' "
-                + "AND sup.deleted_at IS NULL "
                 + "AND p.purchase_date >= ? AND p.purchase_date < ? "
                 + "GROUP BY sup.supplier_id, sup.supplier_name "
                 + "ORDER BY total DESC";
@@ -360,7 +405,8 @@ public class ReportRepository {
     // ------------------------------------------------------------------
 
     /**
-     * Current stock valuation across all active, non-deleted products:
+     * Current stock valuation across all non-deleted products (including
+     * inactive ones, since they may still hold stock):
      * SUM(quantity_in_stock * cost_price), plus the number of distinct items
      * counted. This is a current-state snapshot, not scoped to a date range.
      */
