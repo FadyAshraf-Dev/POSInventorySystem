@@ -29,11 +29,6 @@ public class AuthService {
         CurrentUser.clear();
     }
 
-    public String hashPassword(String password) {
-        Validator.validatePassword(password);
-        return PasswordHasher.hash(password);
-    }
-
     /** A user changes their own password (needs the old one). */
     public void changePassword(int userId, String oldPassword, String newPassword) {
         CurrentUser.requireLogin();
