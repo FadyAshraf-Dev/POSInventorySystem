@@ -7,24 +7,41 @@ import org.example.posinventorysystem.repo.UserRepository;
 
 //Login , logout, password change and user creation.
 public class AuthService {
-    private static final int MIN_PASSWORD_LENGTH = 6;
-
     private final UserRepository userRepo = new UserRepository();
     private final RoleRepository roleRepo = new RoleRepository();
 
+    /** Returns the logged-in user and fills CurrentUser. One generic error on purpose: don't reveal which part was wrong. */
     public User login(String username, String password) {
-        Validator.Check(username != null && !username.isBlank(), "Enter your username.");
-        Validator.Check(password != null && !password.isEmpty(), "Enter your password.");
+        Check.that(username != null && !username.isBlank(), "Enter your username.");
+        Check.that(password != null && !password.isEmpty(), "Enter your password.");
 
         User user = userRepo.findByUsername(username.trim()).orElse(null);
-
         boolean ok = user != null && PasswordHasher.verify(password, user.getPasswordHash());
         Check.that(ok, "Wrong username or password.");
         Check.that(user.isActive(), "This account is disabled. Contact the administrator.");
 
         String roleName = roleRepo.findById(user.getRoleId()).map(Role::getRoleName).orElse("");
-        Session.start(user, roleName);
+        CurrentUser.set(user, roleName);
         return user;
+    }
+
+    public void logout() {
+        CurrentUser.clear();
+    }
+
+    public String hashPassword(String password) {
+        Validator.validatePassword(password);
+        return PasswordHasher.hash(password);
+    }
+
+    /** A user changes their own password (needs the old one). */
+    public void changePassword(int userId, String oldPassword, String newPassword) {
+        CurrentUser.requireLogin();
+        Validator.validatePassword(newPassword);
+        User user = userRepo.findById(userId).orElseThrow(() -> new BusinessException("User not found."));
+        Check.that(PasswordHasher.verify(oldPassword, user.getPasswordHash()), "Old password is incorrect.");
+        String newHash = PasswordHasher.hash(newPassword);
+        ServiceTx.run(conn -> userRepo.updatePassword(conn, userId, newHash));
     }
 
 }

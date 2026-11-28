@@ -1,12 +1,15 @@
 package org.example.posinventorysystem.service;
 
 final class Validator {
+
+    public static final int MIN_PASSWORD_LENGTH = 6;
+
     private Validator() { }
 
-    /** Tiny validation helper: Check.that(condition, "message shown to the user"). */
-    static public void Check(boolean condition, String message) {
-        if (!condition) {
-            throw new BusinessException(message);
-        }
+    public static void validatePassword(String password) {
+        Check.that(password != null && password.length() >= MIN_PASSWORD_LENGTH,
+                "Password must be at least " + MIN_PASSWORD_LENGTH + " characters.");
     }
+
+
 }
